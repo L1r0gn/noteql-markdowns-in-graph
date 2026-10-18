@@ -8,3 +8,7 @@ example-vault/**
 scripts/**
 **/.DS_Store
 *.vsix
+resources/icon-1024.png
+resources/icon-256.png
+resources/icon-128.png
+.workbuddy/**

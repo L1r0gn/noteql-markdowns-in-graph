@@ -63,7 +63,7 @@
 | `docs/preview-panel.png` | 筛选面板与右键菜单         |
 | `docs/preview-light.png` | 浅色主题              |
 
-更多说明见 `docs/SCREENSHOTS.md`。
+更多说明见 `docs/SCREENSHOTS.md`；图标设计与可复用提示词见 `docs/ICON.md`。
 
 ---
 
@@ -91,8 +91,8 @@ npm run compile
 
 ```bash
 npm install
-npm run package          # 产出 markdowns-in-graph-1.1.0.vsix
-code --install-extension markdowns-in-graph-1.1.0.vsix
+npm run package          # 产出 markdowns-in-graph-1.2.0.vsix
+code --install-extension markdowns-in-graph-1.2.0.vsix
 ```
 
 也可以在 VS Code 中：`扩展` 面板右上角 `...` → `从 VSIX 安装...`，选择生成的 `.vsix` 文件。

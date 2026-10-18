@@ -2,9 +2,10 @@
   "name": "markdowns-in-graph",
   "displayName": "Markdowns In Graph",
   "description": "在 VS Code 中复刻 Obsidian 的关系图谱：双链解析、力导向布局、缩放/平移/拖拽、点击跳转、实时更新、筛选搜索与节点聚焦。",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "L1r0gn",
   "license": "MIT",
+  "icon": "resources/icon.png",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -205,7 +206,7 @@
     "watch": "tsc -watch -p ./",
     "typecheck": "tsc -p ./ --noEmit",
     "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links",
-    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-1.1.0.vsix"
+    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-1.2.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
