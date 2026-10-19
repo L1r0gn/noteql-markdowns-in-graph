@@ -10,6 +10,7 @@ core/**
 **/moon.pkg
 **/moon.mod
 docs/MOONBIT.md
+docs/HACKATHON.md
 scripts/**
 **/.DS_Store
 *.vsix
