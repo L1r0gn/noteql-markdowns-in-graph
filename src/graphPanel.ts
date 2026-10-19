@@ -127,7 +127,12 @@ export class GraphPanel {
     );
 
     void vscode.commands.executeCommand('setContext', 'markdownsInGraph.panelVisible', true);
-    this.output.appendLine('[graph] 面板已创建');
+    const coreInfo = this.indexer.coreInfo;
+    this.output.appendLine(
+      coreInfo
+        ? `[graph] 面板已创建（内核 ${coreInfo.backend} v${coreInfo.version}）`
+        : '[graph] 面板已创建（内核尚未加载）'
+    );
   }
 
   // ------------------------------------------------------------ 消息
@@ -330,12 +335,17 @@ export class GraphPanel {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'media', 'graph.css')
     );
+    // MoonBit 布局内核：Webview 侧通过 fetch + WebAssembly 加载
+    const coreUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.context.extensionUri, 'media', 'core.wasm')
+    );
 
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} data:`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
       `font-src ${webview.cspSource}`,
+      `connect-src ${webview.cspSource}`,
       `script-src 'nonce-${nonce}'`
     ].join('; ');
 
@@ -345,6 +355,7 @@ export class GraphPanel {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="core-wasm" content="${coreUri}" />
 <link rel="stylesheet" href="${styleUri}" />
 <title>关系图谱</title>
 </head>

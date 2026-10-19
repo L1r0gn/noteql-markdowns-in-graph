@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
-import { parseMarkdown, RawLink } from './markdownParser';
-import { GraphData, GraphLink, GraphNode, GraphStats } from './types';
+import * as path from 'path';
+
+import { MoonCore } from './core/moonCore';
+import { GraphData } from './types';
 
 const NOTE_EXT = new Set(['.md', '.markdown']);
 /** 只枚举需要参与图谱的文件类型，避免在大型仓库里遍历所有源码 */
@@ -22,47 +24,14 @@ const ATTACHMENT_EXT = new Set([
   '.canvas'
 ]);
 
-interface FileRecord {
-  rel: string;
-  dir: string;
-  base: string;
-  ext: string;
-  /** byName 索引使用的键 */
-  nameKey: string;
-  kind: 'note' | 'attachment';
-  tags: string[];
-  links: RawLink[];
-  mtime: number;
-  size: number;
-}
+/** 每个节点最多携带的标签数（Webview 只用首个标签着色） */
+const MAX_TAGS_PER_NODE = 16;
 
 const posix = {
-  dirname(p: string): string {
-    const i = p.lastIndexOf('/');
-    return i < 0 ? '' : p.slice(0, i);
-  },
-  basename(p: string): string {
-    const i = p.lastIndexOf('/');
-    return i < 0 ? p : p.slice(i + 1);
-  },
   extname(p: string): string {
-    const base = posix.basename(p);
+    const base = p.slice(p.lastIndexOf('/') + 1);
     const i = base.lastIndexOf('.');
     return i <= 0 ? '' : base.slice(i).toLowerCase();
-  },
-  normalize(p: string): string {
-    const parts: string[] = [];
-    for (const seg of p.split('/')) {
-      if (!seg || seg === '.') {
-        continue;
-      }
-      if (seg === '..') {
-        parts.pop();
-        continue;
-      }
-      parts.push(seg);
-    }
-    return parts.join('/');
   }
 };
 
@@ -72,11 +41,16 @@ function hasDotSegment(rel: string): boolean {
 
 /**
  * 扫描工作区、维护链接索引，并按需产出图谱数据。
+ *
+ * 自 v2.0 起，**这里不再包含任何 Markdown 解析或图算法**：
+ * 文本原样交给 MoonBit 内核（`MoonCore`），TS 只负责枚举文件、
+ * 读取内容、监听变化，以及把内核吐出的 JSON 转发给 Webview。
  */
 export class GraphIndexer implements vscode.Disposable {
-  private readonly files = new Map<string, FileRecord>();
-  private readonly byPath = new Map<string, string>();
-  private readonly byName = new Map<string, string[]>();
+  private core: MoonCore | undefined;
+  private corePromise: Promise<MoonCore> | undefined;
+  /** 已索引的文件（相对路径），用于增量更新与删除 */
+  private readonly known = new Set<string>();
 
   private root: vscode.Uri | undefined;
   private rootName = '';
@@ -125,32 +99,36 @@ export class GraphIndexer implements vscode.Disposable {
   }
 
   public get fileCount(): number {
-    let n = 0;
-    for (const rec of this.files.values()) {
-      if (rec.kind === 'note') {
-        n++;
-      }
+    return this.core?.noteCount ?? 0;
+  }
+
+  /** 当前内核后端（wasm / js）与版本，用于状态栏与日志 */
+  public get coreInfo(): { backend: string; version: string } | undefined {
+    if (!this.core) {
+      return undefined;
     }
-    return n;
+    return { backend: this.core.backend, version: this.core.version };
   }
 
   /** 供“文件夹图谱”命令使用：列出含笔记的目录（含父级），并统计各目录下的笔记数 */
   public listFolders(): Array<{ path: string; count: number }> {
-    const counts = new Map<string, number>();
-    for (const rec of this.files.values()) {
-      if (rec.kind !== 'note') {
-        continue;
-      }
-      const parts = rec.dir ? rec.dir.split('/') : [];
-      let acc = '';
-      for (const part of parts) {
-        acc = acc ? `${acc}/${part}` : part;
-        counts.set(acc, (counts.get(acc) ?? 0) + 1);
-      }
+    return this.core?.folders() ?? [];
+  }
+
+  /**
+   * 加载 MoonBit 内核。内核是 wasm/JS 模块，加载是异步的，
+   * 其余所有索引操作都排在这之后。
+   */
+  public async ensureCore(): Promise<MoonCore> {
+    if (!this.corePromise) {
+      const mediaDir = path.join(this.context.extensionUri.fsPath, 'media');
+      this.corePromise = MoonCore.load({
+        mediaDir,
+        log: (message) => this.output.appendLine(message)
+      });
     }
-    return Array.from(counts.entries())
-      .map(([path, count]) => ({ path, count }))
-      .sort((a, b) => a.path.localeCompare(b.path));
+    this.core = await this.corePromise;
+    return this.core;
   }
 
   public async ensureReady(): Promise<void> {
@@ -198,9 +176,10 @@ export class GraphIndexer implements vscode.Disposable {
 
   private async scanAll(): Promise<void> {
     const started = Date.now();
-    this.files.clear();
-    this.byPath.clear();
-    this.byName.clear();
+    const core = await this.ensureCore();
+
+    core.resetVault();
+    this.known.clear();
 
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
@@ -228,7 +207,6 @@ export class GraphIndexer implements vscode.Disposable {
     }
 
     const queue = uris.slice();
-    const records: FileRecord[] = [];
     const workerCount = Math.min(16, Math.max(1, queue.length));
     const workers: Promise<void>[] = [];
     for (let i = 0; i < workerCount; i++) {
@@ -239,120 +217,69 @@ export class GraphIndexer implements vscode.Disposable {
             if (!uri) {
               return;
             }
-            const rec = await this.readRecord(uri);
-            if (rec) {
-              records.push(rec);
-            }
+            await this.ingest(uri);
           }
         })()
       );
     }
     await Promise.all(workers);
 
-    for (const rec of records) {
-      this.addRecord(rec);
-    }
     this.initialized = true;
+    const backend = this.core ? `${this.core.backend} v${this.core.version}` : 'n/a';
     this.output.appendLine(
-      `[graph] 扫描完成：${this.fileCount} 篇笔记 / ${this.files.size} 个文件，用时 ${Date.now() - started}ms`
+      `[graph] 扫描完成：${this.fileCount} 篇笔记 / ${core.fileCount} 个文件，` +
+        `用时 ${Date.now() - started}ms（MoonBit 内核 ${backend}）`
     );
   }
 
-  private async readRecord(uri: vscode.Uri): Promise<FileRecord | undefined> {
+  /**
+   * 把一个文件交给内核：笔记传全文，附件只传元信息。
+   * 文本由 MoonBit 解析，TS 侧不再持有任何链接数据。
+   */
+  private async ingest(uri: vscode.Uri): Promise<void> {
     const rel = this.toRel(uri);
-    if (!rel || hasDotSegment(rel)) {
-      return undefined;
+    if (rel === undefined || rel === '' || hasDotSegment(rel)) {
+      return;
     }
     const ext = posix.extname(rel);
-    const kind: 'note' | 'attachment' = NOTE_EXT.has(ext) ? 'note' : 'attachment';
-    if (kind === 'attachment' && !ATTACHMENT_EXT.has(ext)) {
-      return undefined;
+    const isNote = NOTE_EXT.has(ext);
+    if (!isNote && !ATTACHMENT_EXT.has(ext)) {
+      return;
     }
 
     let stat: vscode.FileStat;
     try {
       stat = await vscode.workspace.fs.stat(uri);
     } catch {
-      return undefined;
-    }
-
-    const dir = posix.dirname(rel);
-    const base = posix.basename(rel).replace(/\.[^.]+$/, '');
-    let tags: string[] = [];
-    let links: RawLink[] = [];
-
-    if (kind === 'note') {
-      const maxBytes =
-        vscode.workspace.getConfiguration('markdownsInGraph').get<number>('maxFileSizeKb', 2048) * 1024;
-      if (stat.size <= maxBytes) {
-        try {
-          const data = await vscode.workspace.fs.readFile(uri);
-          const text = Buffer.from(data).toString('utf8');
-          const parsed = parseMarkdown(text);
-          tags = parsed.tags;
-          links = parsed.links;
-        } catch (err) {
-          this.output.appendLine(`[graph] 读取失败 ${rel}: ${String(err)}`);
-        }
-      } else {
-        this.output.appendLine(`[graph] 跳过超大文件 ${rel} (${stat.size} bytes)`);
-      }
-    }
-
-    return {
-      rel,
-      dir,
-      base,
-      ext,
-      nameKey: (kind === 'note' ? base : base + ext).toLowerCase(),
-      kind,
-      tags,
-      links,
-      mtime: stat.mtime,
-      size: stat.size
-    };
-  }
-
-  private addRecord(rec: FileRecord): void {
-    this.files.set(rec.rel, rec);
-    const lower = rec.rel.toLowerCase();
-    this.byPath.set(lower, rec.rel);
-    if (rec.kind === 'note') {
-      this.byPath.set(lower.replace(/\.(md|markdown)$/, ''), rec.rel);
-    }
-    const list = this.byName.get(rec.nameKey);
-    if (list) {
-      if (!list.includes(rec.rel)) {
-        list.push(rec.rel);
-      }
-    } else {
-      this.byName.set(rec.nameKey, [rec.rel]);
-    }
-  }
-
-  private removeRecord(rel: string): void {
-    const rec = this.files.get(rel);
-    if (!rec) {
       return;
     }
-    this.files.delete(rel);
-    const lower = rel.toLowerCase();
-    if (this.byPath.get(lower) === rel) {
-      this.byPath.delete(lower);
+
+    const core = await this.ensureCore();
+
+    if (!isNote) {
+      core.addAttachment(rel, stat.size, stat.mtime);
+      this.known.add(rel);
+      return;
     }
-    const noExt = lower.replace(/\.(md|markdown)$/, '');
-    if (this.byPath.get(noExt) === rel) {
-      this.byPath.delete(noExt);
+
+    const maxBytes =
+      vscode.workspace.getConfiguration('markdownsInGraph').get<number>('maxFileSizeKb', 2048) *
+      1024;
+    if (stat.size > maxBytes) {
+      // 超大文件只作为节点显示，不解析其链接
+      core.addAttachment(rel, stat.size, stat.mtime);
+      this.known.add(rel);
+      this.output.appendLine(`[graph] 跳过超大文件 ${rel} (${stat.size} bytes)`);
+      return;
     }
-    const list = this.byName.get(rec.nameKey);
-    if (list) {
-      const i = list.indexOf(rel);
-      if (i >= 0) {
-        list.splice(i, 1);
-      }
-      if (list.length === 0) {
-        this.byName.delete(rec.nameKey);
-      }
+
+    try {
+      const data = await vscode.workspace.fs.readFile(uri);
+      const text = Buffer.from(data).toString('utf8');
+      core.addNote(rel, stat.size, stat.mtime, text);
+      this.known.add(rel);
+    } catch (err) {
+      this.output.appendLine(`[graph] 读取失败 ${rel}: ${String(err)}`);
     }
   }
 
@@ -421,14 +348,11 @@ export class GraphIndexer implements vscode.Disposable {
       return;
     }
     const rel = this.toRel(uri);
-    if (!rel) {
+    if (rel === undefined) {
       return;
     }
-    const rec = await this.readRecord(uri);
-    this.removeRecord(rel);
-    if (rec) {
-      this.addRecord(rec);
-    }
+    // 内核按 rel 覆盖写入，无需先删除旧记录
+    await this.ingest(uri);
     this.notifySoon();
   }
 
@@ -437,10 +361,11 @@ export class GraphIndexer implements vscode.Disposable {
       return;
     }
     const rel = this.toRel(uri);
-    if (!rel) {
+    if (rel === undefined) {
       return;
     }
-    this.removeRecord(rel);
+    this.core?.remove(rel);
+    this.known.delete(rel);
     this.notifySoon();
   }
 
@@ -479,189 +404,26 @@ export class GraphIndexer implements vscode.Disposable {
     return vscode.Uri.joinPath(this.root, ...rel.split('/'));
   }
 
-  // ---------------------------------------------------------------- 解析链接
-
-  /**
-   * 按 Obsidian 的“最短路径优先”规则解析链接目标：
-   * 1. 相对当前文件目录;
-   * 2. 相对工作区根目录;
-   * 3. 同名文件（优先同目录，其次层级最浅的）。
-   */
-  private resolveTarget(fromRel: string, rawTarget: string): FileRecord | undefined {
-    let target = rawTarget.trim();
-    if (!target) {
-      return undefined;
-    }
-    target = target.replace(/\\/g, '/');
-    try {
-      target = decodeURIComponent(target);
-    } catch {
-      /* 保留原样 */
-    }
-    target = target.replace(/^<|>$/g, '').replace(/^\/+/, '');
-    if (!target) {
-      return undefined;
-    }
-
-    const lower = target.toLowerCase();
-    const dir = posix.dirname(fromRel);
-    const candidates: string[] = [];
-    if (target.startsWith('./') || target.startsWith('../')) {
-      candidates.push(posix.normalize(`${dir}/${lower}`));
-    } else {
-      candidates.push(posix.normalize(`${dir}/${lower}`));
-      candidates.push(posix.normalize(lower));
-    }
-    for (const candidate of candidates) {
-      const hit = this.byPath.get(candidate);
-      if (hit) {
-        return this.files.get(hit);
-      }
-    }
-
-    const name = posix.basename(lower);
-    const trimmed = name.replace(/\.(md|markdown)$/, '');
-    const byName = this.byName.get(trimmed) ?? this.byName.get(name);
-    if (byName && byName.length > 0) {
-      if (byName.length === 1) {
-        return this.files.get(byName[0]);
-      }
-      const sameDir = byName.find((rel) => posix.dirname(rel) === dir);
-      if (sameDir) {
-        return this.files.get(sameDir);
-      }
-      const shallowest = [...byName].sort(
-        (a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b)
-      );
-      return this.files.get(shallowest[0]);
-    }
-
-    return undefined;
-  }
-
   // ---------------------------------------------------------------- 构图
 
+  /**
+   * 图谱数据全部由 MoonBit 内核计算，这里只是把 JSON 反序列化后返回。
+   */
   public buildGraph(): GraphData {
-    const nodes = new Map<string, GraphNode>();
-    const degrees = new Map<string, number>();
-    const links: GraphLink[] = [];
-    const seen = new Set<string>();
-    const referencedAttachments = new Set<string>();
-    const pending: Array<{ from: string; to: string; kind: GraphLink['kind'] }> = [];
-    const ghosts = new Map<string, GraphNode>();
-
-    const ensureNode = (rec: FileRecord): GraphNode => {
-      const existing = nodes.get(rec.rel);
-      if (existing) {
-        return existing;
-      }
-      const node: GraphNode = {
-        id: rec.rel,
-        label: rec.base,
-        path: rec.rel,
-        kind: rec.kind,
-        ext: rec.ext,
-        folder: rec.dir,
-        tags: rec.tags.slice(0, 16),
-        size: rec.size,
-        mtime: rec.mtime,
-        degree: 0
+    if (!this.core) {
+      return {
+        nodes: [],
+        links: [],
+        stats: { notes: 0, attachments: 0, unresolved: 0, links: 0 },
+        generatedAt: Date.now(),
+        rootName: this.rootName
       };
-      nodes.set(rec.rel, node);
-      return node;
-    };
-
-    const ensureGhost = (rawTarget: string): GraphNode => {
-      const clean = rawTarget.trim() || '(空链接)';
-      const id = `u:${clean.toLowerCase()}`;
-      let node = ghosts.get(id);
-      if (!node) {
-        node = {
-          id,
-          label: posix.basename(clean.replace(/\\/g, '/')) || clean,
-          path: clean,
-          kind: 'unresolved',
-          ext: '',
-          folder: '',
-          tags: [],
-          size: 0,
-          mtime: 0,
-          degree: 0
-        };
-        ghosts.set(id, node);
-      }
-      return node;
-    };
-
-    const notes = Array.from(this.files.values())
-      .filter((rec) => rec.kind === 'note')
-      .sort((a, b) => a.rel.localeCompare(b.rel));
-
-    for (const rec of notes) {
-      ensureNode(rec);
-      for (const link of rec.links) {
-        const resolved = this.resolveTarget(rec.rel, link.target);
-        if (resolved) {
-          if (resolved.rel === rec.rel) {
-            continue;
-          }
-          if (resolved.kind === 'attachment') {
-            referencedAttachments.add(resolved.rel);
-          }
-          pending.push({ from: rec.rel, to: resolved.rel, kind: link.kind });
-        } else {
-          const ghost = ensureGhost(link.target);
-          pending.push({ from: rec.rel, to: ghost.id, kind: link.kind });
-        }
-      }
     }
+    return this.core.buildGraph(MAX_TAGS_PER_NODE, Date.now(), this.rootName);
+  }
 
-    // 只有被引用到的附件才进入图谱，避免附件目录喧宾夺主
-    for (const rel of referencedAttachments) {
-      const rec = this.files.get(rel);
-      if (rec) {
-        ensureNode(rec);
-      }
-    }
-    for (const ghost of ghosts.values()) {
-      nodes.set(ghost.id, ghost);
-    }
-
-    for (const edge of pending) {
-      if (!nodes.has(edge.from) || !nodes.has(edge.to)) {
-        continue;
-      }
-      // 同一对文件之间的多种写法（[[a]] 与 [a](a.md)）合并为一条边
-      const key = `${edge.from}\u0000${edge.to}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      links.push({ source: edge.from, target: edge.to, kind: edge.kind });
-      degrees.set(edge.from, (degrees.get(edge.from) ?? 0) + 1);
-      degrees.set(edge.to, (degrees.get(edge.to) ?? 0) + 1);
-    }
-
-    const nodeList = Array.from(nodes.values());
-    for (const node of nodeList) {
-      node.degree = degrees.get(node.id) ?? 0;
-    }
-    // 度数低的先画，枢纽节点绘制在上层
-    nodeList.sort((a, b) => a.degree - b.degree || a.label.localeCompare(b.label));
-
-    const stats: GraphStats = {
-      notes: nodeList.filter((n) => n.kind === 'note').length,
-      attachments: nodeList.filter((n) => n.kind === 'attachment').length,
-      unresolved: nodeList.filter((n) => n.kind === 'unresolved').length,
-      links: links.length
-    };
-
-    return {
-      nodes: nodeList,
-      links,
-      stats,
-      generatedAt: Date.now(),
-      rootName: this.rootName
-    };
+  /** 诊断：把链接目标解析成真实路径（供测试与问题排查使用） */
+  public resolveLink(fromRel: string, target: string): string | undefined {
+    return this.core?.resolve(fromRel, target);
   }
 }
