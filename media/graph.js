@@ -98,7 +98,8 @@
       folders: [],
       tags: [],
       depth: 0,
-      focus: null
+      focus: null,
+      folderScope: null
     },
     settings: Object.assign({}, DEFAULTS),
     openInNewTab: false,
@@ -137,6 +138,7 @@
   var folderChipsEl = $('#folder-chips');
   var tagChipsEl = $('#tag-chips');
   var focusNameEl = $('#focus-name');
+  var scopeSelectEl = $('#s-scope');
   var depthGroupEl = $('#depth-group');
 
   state.ctx = canvas.getContext('2d');
@@ -377,6 +379,10 @@
       if (n.kind === 'unresolved' && !state.filters.showUnresolved) continue;
       if (n.kind === 'attachment' && !state.filters.showAttachments) continue;
       if (state.filters.folders.length && state.filters.folders.indexOf(n.folder || '') < 0) continue;
+      if (state.filters.folderScope) {
+        var scopeDir = n.folder || '';
+        if (scopeDir !== state.filters.folderScope && scopeDir.indexOf(state.filters.folderScope + '/') !== 0) continue;
+      }
       if (state.filters.tags.length) {
         var hasTag = (n.tags || []).some(function (t) {
           return state.filters.tags.indexOf(t) >= 0;
@@ -781,14 +787,25 @@
     return text;
   }
 
-  function shouldShowLabel(node, k, emphasis) {
+  /**
+   * 标签透明度：随节点在屏幕上的尺寸平滑淡出。
+   * 缩放越大 → 节点越大 → 标签越清晰；缩到阈值以下逐渐透明直至完全隐藏。
+   * 大节点（连接多）的淡出窗口更靠后，因此标签保留更久。
+   */
+  function labelOpacity(node, k, emphasis) {
     if (!state.settings.showLabels) {
-      return false;
+      return 0;
     }
+    var base = Math.max(0.1, state.settings.labelThreshold);
+    var sizeBonus = clamp((node.radius - 4) / 12, 0, 0.18);
+    var fadeStart = base + sizeBonus;
+    var fadeEnd = base * 0.55 + sizeBonus;
+    var t = (k - fadeEnd) / Math.max(0.001, fadeStart - fadeEnd);
     if (emphasis) {
-      return true;
+      t = Math.max(t, 0.92);
     }
-    return k >= state.settings.labelThreshold || node.degree >= 7;
+    t = clamp(t, 0, 1);
+    return t * t * (3 - 2 * t); // smoothstep，避免线性淡出的生硬感
   }
 
   function draw() {
@@ -923,22 +940,29 @@
         ctx.globalAlpha = 1;
       }
 
-      if (shouldShowLabel(n, k, n.id === focusId || n.id === state.selectedId)) {
-        var text = labelOf(n);
-        var ly = sy + r + 4;
-        ctx.font = (n.id === focusId ? '600 12px ' : '11px ') + state.font;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = th.halo;
-        ctx.strokeText(text, sx, ly);
+      var emphasis = n.id === focusId || n.id === state.selectedId;
+      var fade = labelOpacity(n, k, emphasis);
+      if (fade > 0.02) {
+        var labelAlpha = 0.92;
         if (hasQuery && !state.matches.has(n.id)) {
-          ctx.fillStyle = th.labelDim;
+          labelAlpha = 0.14;
         } else if (focusId && !isNeighbor && n.id !== focusId) {
           // 与焦点节点无连接：标签跟随节点一起淡出
-          ctx.fillStyle = withAlpha(th.label, 0.26);
-        } else {
-          ctx.fillStyle = withAlpha(th.label, 0.92);
+          labelAlpha = 0.26;
         }
-        ctx.fillText(text, sx, ly);
+        labelAlpha *= fade;
+        if (labelAlpha > 0.02) {
+          var text = labelOf(n);
+          var ly = sy + r + 4;
+          ctx.font = (n.id === focusId ? '600 12px ' : '11px ') + state.font;
+          ctx.globalAlpha = labelAlpha;
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = th.halo;
+          ctx.strokeText(text, sx, ly);
+          ctx.fillStyle = th.label;
+          ctx.fillText(text, sx, ly);
+          ctx.globalAlpha = 1;
+        }
       }
     }
 
@@ -1423,6 +1447,9 @@
     if (state.filters.focus) {
       html += '<span>局部图谱</span>';
     }
+    if (state.filters.folderScope) {
+      html += '<span>范围 ' + escapeHtml(state.filters.folderScope) + '</span>';
+    }
     legendEl.innerHTML = html;
   }
 
@@ -1469,6 +1496,90 @@
         toggleFilter(state.filters.tags, entry[0]);
       }, entry[0]));
     });
+  }
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"]/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+
+  /** 收集所有可作为展示范围的文件夹（含父级目录），按路径排序 */
+  function collectScopeFolders() {
+    var set = new Set();
+    for (var i = 0; i < state.rawNodes.length; i++) {
+      var node = state.rawNodes[i];
+      if (node.kind !== 'note') continue;
+      var folder = node.folder || '';
+      if (!folder) continue;
+      var parts = folder.split('/');
+      var acc = '';
+      for (var j = 0; j < parts.length; j++) {
+        acc = acc ? acc + '/' + parts[j] : parts[j];
+        set.add(acc);
+      }
+    }
+    return Array.from(set).sort(function (a, b) {
+      return a.localeCompare(b, 'zh-CN');
+    });
+  }
+
+  function folderInScope(folder) {
+    var target = state.filters.folderScope;
+    if (!target) return true;
+    var dir = folder || '';
+    return dir === target || dir.indexOf(target + '/') === 0;
+  }
+
+  function refreshScopeOptions() {
+    if (!scopeSelectEl) return;
+    var folders = collectScopeFolders();
+    var current = state.filters.folderScope || '';
+    if (current && folders.indexOf(current) < 0) {
+      // 目录被删除或改名后，自动回落到整个工作区
+      state.filters.folderScope = null;
+      current = '';
+    }
+    scopeSelectEl.innerHTML = '';
+    var rootOption = document.createElement('option');
+    rootOption.value = '';
+    rootOption.textContent = '整个工作区';
+    scopeSelectEl.appendChild(rootOption);
+    folders.forEach(function (folder) {
+      var option = document.createElement('option');
+      option.value = folder;
+      option.textContent = folder;
+      scopeSelectEl.appendChild(option);
+    });
+    scopeSelectEl.value = current;
+    scopeSelectEl.title = current ? '当前范围：' + current : '当前范围：整个工作区（含全部笔记）';
+  }
+
+  function applyScope(folder) {
+    var next = folder || null;
+    if (state.filters.folderScope === next) {
+      refreshScopeOptions();
+      return;
+    }
+    state.filters.folderScope = next;
+    // 范围切换后，原来的节点聚焦可能已经不在范围内
+    state.filters.focus = null;
+    state.filters.depth = 0;
+    rebuild();
+    refreshScopeOptions();
+    refreshFocusUI();
+    reheat(0.9);
+    fitView(true);
+    persistSoon();
+    if (next) {
+      toast(
+        state.nodes.length
+          ? '已切换到「' + next + '」· ' + state.nodes.length + ' 个节点'
+          : '「' + next + '」下没有可显示的笔记'
+      );
+    } else {
+      toast('范围：整个工作区');
+    }
   }
 
   function makeChip(label, count, active, onClick, title) {
@@ -1540,6 +1651,7 @@
     $('#s-color').value = s.colorMode;
     $('#s-labels').checked = s.showLabels;
 
+    refreshScopeOptions();
     updateStats();
     refreshFocusUI();
   }
@@ -1571,9 +1683,20 @@
       return;
     }
 
+    // 文件夹被删除/改名后，范围回到整个工作区
+    if (state.filters.folderScope) {
+      var scopeAlive = state.rawNodes.some(function (item) {
+        return item.kind === 'note' && folderInScope(item.folder || '');
+      });
+      if (!scopeAlive) {
+        state.filters.folderScope = null;
+      }
+    }
+
     var first = !state.initialized;
     rebuild();
     refreshChips();
+    refreshScopeOptions();
     refreshFocusUI();
 
     if (first || reset) {
@@ -1645,6 +1768,9 @@
       case 'focus':
         focusByPath(msg.path, msg.depth);
         break;
+      case 'scope':
+        applyScope(msg.folder || null);
+        break;
       case 'activeFile':
         state.activeId = msg.path;
         state.dirty = true;
@@ -1712,6 +1838,7 @@
       if (Array.isArray(f.tags)) state.filters.tags = f.tags.slice();
       if (typeof f.depth === 'number') state.filters.depth = f.depth;
       if (typeof f.focus === 'string') state.filters.focus = f.focus;
+      if (typeof f.folderScope === 'string') state.filters.folderScope = f.folderScope;
     }
     if (saved.settings) {
       Object.keys(DEFAULTS).forEach(function (key) {
@@ -1847,6 +1974,12 @@
         searchEl.blur();
       }
     });
+    if (scopeSelectEl) {
+      scopeSelectEl.addEventListener('change', function () {
+        applyScope(scopeSelectEl.value || null);
+      });
+    }
+
     searchClearEl.addEventListener('click', function () {
       searchEl.value = '';
       state.filters.query = '';

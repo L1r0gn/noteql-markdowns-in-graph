@@ -134,6 +134,25 @@ export class GraphIndexer implements vscode.Disposable {
     return n;
   }
 
+  /** 供“文件夹图谱”命令使用：列出含笔记的目录（含父级），并统计各目录下的笔记数 */
+  public listFolders(): Array<{ path: string; count: number }> {
+    const counts = new Map<string, number>();
+    for (const rec of this.files.values()) {
+      if (rec.kind !== 'note') {
+        continue;
+      }
+      const parts = rec.dir ? rec.dir.split('/') : [];
+      let acc = '';
+      for (const part of parts) {
+        acc = acc ? `${acc}/${part}` : part;
+        counts.set(acc, (counts.get(acc) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([path, count]) => ({ path, count }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
   public async ensureReady(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = this.initialize();

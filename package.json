@@ -2,7 +2,7 @@
   "name": "markdowns-in-graph",
   "displayName": "Markdowns In Graph",
   "description": "在 VS Code 中复刻 Obsidian 的关系图谱：双链解析、力导向布局、缩放/平移/拖拽、点击跳转、实时更新、筛选搜索与节点聚焦。",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "L1r0gn",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -27,6 +27,7 @@
     "onStartupFinished",
     "onCommand:markdownsInGraph.show",
     "onCommand:markdownsInGraph.showLocal",
+    "onCommand:markdownsInGraph.showFolder",
     "onCommand:markdownsInGraph.refresh"
   ],
   "main": "./out/extension.js",
@@ -43,6 +44,12 @@
         "title": "打开当前笔记的局部图谱",
         "category": "关系图谱",
         "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "markdownsInGraph.showFolder",
+        "title": "打开指定文件夹的图谱",
+        "category": "关系图谱",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "markdownsInGraph.refresh",
@@ -85,6 +92,13 @@
           "group": "navigation@9"
         }
       ],
+      "explorer/context": [
+        {
+          "command": "markdownsInGraph.showFolder",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@9"
+        }
+      ],
       "commandPalette": [
         {
           "command": "markdownsInGraph.show",
@@ -93,6 +107,10 @@
         {
           "command": "markdownsInGraph.showLocal",
           "when": "editorLangId == markdown"
+        },
+        {
+          "command": "markdownsInGraph.showFolder",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
@@ -206,7 +224,7 @@
     "watch": "tsc -watch -p ./",
     "typecheck": "tsc -p ./ --noEmit",
     "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links",
-    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-1.2.0.vsix"
+    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-1.3.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

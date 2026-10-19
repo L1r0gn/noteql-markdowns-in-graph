@@ -91,8 +91,8 @@ npm run compile
 
 ```bash
 npm install
-npm run package          # 产出 markdowns-in-graph-1.2.0.vsix
-code --install-extension markdowns-in-graph-1.2.0.vsix
+npm run package          # 产出 markdowns-in-graph-1.3.0.vsix
+code --install-extension markdowns-in-graph-1.3.0.vsix
 ```
 
 也可以在 VS Code 中：`扩展` 面板右上角 `...` → `从 VSIX 安装...`，选择生成的 `.vsix` 文件。
@@ -158,6 +158,21 @@ npm run install:vsix
 - 勾选「仅显示搜索结果」可隐藏未命中节点
 - 按 `Enter` 直接把视角移动到第一个命中节点
 - 按 `Esc` 退出输入框
+
+### 文件夹图谱
+
+以「某个文件夹的整体状态」为展示范围，而不是围绕单篇笔记展开多级邻域：
+
+1. 命令面板执行 `关系图谱: 打开指定文件夹的图谱`，在列表中选择目录（附笔记数量）；
+2. 或在资源管理器中右键任意文件夹 → `打开指定文件夹的图谱`；
+3. 图谱打开后，可在右侧面板顶部的「图谱范围」下拉里随时切换目录或回到整个工作区。
+
+规则：
+
+- 范围包含该目录的**所有子目录**；
+- 只保留两端都在范围内的连线，指向范围外笔记的链接会被忽略；
+- 文件夹内互不相连的簇、孤立笔记也会显示，只是没有连线（受「孤立笔记」开关控制，默认开启）；
+- 与节点聚焦可叠加：在范围内再聚焦某个节点时，按该节点做 1~3 层邻域收窄。
 
 ### 局部图谱
 
@@ -245,6 +260,7 @@ npm run install:vsix
 | ------------------------- | ----------------- |
 | `markdownsInGraph.show`      | 关系图谱: 打开全局关系图谱    |
 | `markdownsInGraph.showLocal` | 关系图谱: 打开当前笔记的局部图谱 |
+| `markdownsInGraph.showFolder` | 关系图谱: 打开指定文件夹的图谱 |
 | `markdownsInGraph.refresh`   | 关系图谱: 重新扫描并刷新图谱   |
 
 侧边栏还提供一个状态栏按钮（`$(type-hierarchy) 图谱`），点击即可打开全局图谱。

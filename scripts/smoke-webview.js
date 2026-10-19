@@ -48,7 +48,13 @@ function makeCtx() {
       if (prop in t) return t[prop];
       if (prop === 'canvas') return window.document.querySelector('#graph');
       if (prop === 'fillText') {
-        return function (text) { labelCalls.push({ text: String(text), style: String(t.fillStyle) }); };
+        return function (text) {
+          labelCalls.push({
+            text: String(text),
+            style: String(t.fillStyle),
+            alpha: alphaOf(t.fillStyle) * (typeof t.globalAlpha === 'number' ? t.globalAlpha : 1)
+          });
+        };
       }
       return function () { ctxCalls++; };
     },
@@ -164,6 +170,27 @@ function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
   window.document.querySelector('#focus-clear').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   await wait(120);
 
+  // 文件夹范围：只展示该目录及子目录，孤立节点也保留
+  const baselineStats = window.document.querySelector('#stats').textContent;
+  const scope = window.document.querySelector('#s-scope');
+  const scopeValues = Array.from(scope.options).map((o) => o.value);
+  console.log('范围选项:', scopeValues.join(' | '));
+  check('范围下拉包含子目录', scopeValues.includes('notes/深层'));
+  scope.value = 'notes';
+  scope.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(250);
+  const scopedStats = window.document.querySelector('#stats').textContent;
+  console.log('范围=notes:', scopedStats);
+  check('按文件夹范围过滤节点', /^20 个节点/.test(scopedStats));
+  scope.value = '';
+  scope.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await wait(250);
+  check(
+    '恢复整个工作区',
+    window.document.querySelector('#stats').textContent === baselineStats,
+    window.document.querySelector('#stats').textContent
+  );
+
   // 工具栏
   window.document.querySelector('#btn-zoom-in').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   window.document.querySelector('#btn-fit').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -199,12 +226,12 @@ function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
     labelCalls.length = 0;
     window.dispatchEvent(new window.Event('resize'));
     await wait(250);
-    const alphas = labelCalls.map((c) => alphaOf(c.style));
+    const alphas = labelCalls.map((c) => c.alpha);
     const bright = alphas.filter((a) => a >= 0.8).length;
     const dim = alphas.filter((a) => a <= 0.4).length;
     const hovered = labelCalls
       .filter((c) => tipTitle.indexOf(c.text) === 0 || c.text.indexOf(tipTitle.slice(0, 6)) === 0)
-      .map((c) => alphaOf(c.style));
+      .map((c) => c.alpha);
     console.log(`悬停「${tipTitle}」标签透明度: 高亮 ${bright} / 变暗 ${dim} / 共 ${alphas.length}`);
     check('存在高亮标签', bright > 0);
     check('未连接节点的标签已变暗', dim > 0);
@@ -237,6 +264,33 @@ function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
   color.value = 'degree';
   color.dispatchEvent(new window.Event('change', { bubbles: true }));
   await wait(300);
+
+  // 标签随缩放平滑淡出：缩到最小时应完全隐藏
+  // 先连续 Esc 关闭菜单/面板并取消选中，再移出画布清除悬停强调
+  for (let i = 0; i < 3; i++) {
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+    await wait(40);
+  }
+  canvas.dispatchEvent(new window.MouseEvent('pointerleave', { bubbles: true }));
+  await wait(80);
+  for (let i = 0; i < 8; i++) {
+    const wheel = new window.MouseEvent('wheel', {
+      clientX: 640,
+      clientY: 410,
+      bubbles: true,
+      cancelable: true
+    });
+    wheel.deltaY = 480;
+    wheel.deltaMode = 0;
+    canvas.dispatchEvent(wheel);
+    await wait(30);
+  }
+  await wait(450);
+  labelCalls.length = 0;
+  window.dispatchEvent(new window.Event('resize'));
+  await wait(150);
+  console.log('最小缩放时的标签绘制次数:', labelCalls.length);
+  check('极度缩小时标签完全隐藏', labelCalls.length === 0);
 
   // 空数据
   send({ type: 'graph', data: { nodes: [], links: [], stats: { notes: 0, attachments: 0, unresolved: 0, links: 0 }, generatedAt: Date.now(), rootName: '' }, reset: true });

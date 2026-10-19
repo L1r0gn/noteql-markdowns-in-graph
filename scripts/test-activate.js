@@ -22,7 +22,12 @@ const errors = [];
   console.log('已注册命令:', registered.join(', '));
   console.log('订阅数量:', context.subscriptions.length);
 
-  const expected = ['markdownsInGraph.show', 'markdownsInGraph.showLocal', 'markdownsInGraph.refresh'];
+  const expected = [
+    'markdownsInGraph.show',
+    'markdownsInGraph.showLocal',
+    'markdownsInGraph.showFolder',
+    'markdownsInGraph.refresh'
+  ];
   for (const id of expected) {
     const ok = registered.includes(id);
     console.log(`${ok ? 'PASS' : 'FAIL'}  注册 ${id}`);

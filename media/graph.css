@@ -514,6 +514,30 @@ canvas#graph.pointing {
   outline: none;
 }
 
+.wide-select {
+  width: 100%;
+  height: 26px;
+  font-size: 11px;
+  font-family: inherit;
+  border-radius: 5px;
+  padding: 0 6px;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  background: var(--vscode-dropdown-background, rgba(128, 128, 128, 0.1));
+  border: 1px solid var(--vscode-dropdown-border, var(--graph-border));
+  outline: none;
+}
+
+.wide-select:focus {
+  border-color: var(--vscode-focusBorder, var(--graph-accent));
+}
+
+.sec-note {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--graph-text-dim);
+}
+
 .wide-btn {
   width: 100%;
   margin-top: 8px;

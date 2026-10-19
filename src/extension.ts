@@ -44,6 +44,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await GraphPanel.createOrShow(context, indexer, output, { focus: rel, depth });
     }),
 
+    vscode.commands.registerCommand('markdownsInGraph.showFolder', async (uri?: unknown) => {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Window, title: '正在索引 Markdown 笔记…' },
+        () => indexer.ensureReady()
+      );
+
+      let rel: string | undefined;
+      if (uri instanceof vscode.Uri) {
+        rel = indexer.toRel(uri);
+      }
+      if (rel === undefined) {
+        const picks = [
+          {
+            label: '$(root-folder) 整个工作区',
+            description: `${indexer.fileCount} 篇笔记`,
+            path: ''
+          },
+          ...indexer.listFolders().map((folder) => ({
+            label: `$(folder) ${folder.path}`,
+            description: `${folder.count} 篇笔记`,
+            path: folder.path
+          }))
+        ];
+        const chosen = await vscode.window.showQuickPick(picks, {
+          placeHolder: '选择要展示的文件夹（包含其子文件夹）',
+          matchOnDescription: true
+        });
+        if (!chosen) {
+          return;
+        }
+        rel = chosen.path;
+      }
+
+      await GraphPanel.createOrShow(context, indexer, output, { folder: rel });
+    }),
+
     vscode.commands.registerCommand('markdownsInGraph.refresh', async () => {
       await indexer.ensureReady();
       if (GraphPanel.current) {

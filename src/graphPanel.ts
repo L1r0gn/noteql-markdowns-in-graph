@@ -4,6 +4,8 @@ import { GraphIndexer } from './indexer';
 export interface PanelOptions {
   focus?: string;
   depth?: number;
+  /** 以某个文件夹（相对工作区）为展示范围；空字符串表示整个工作区 */
+  folder?: string;
 }
 
 interface UiConfig {
@@ -40,6 +42,7 @@ export class GraphPanel {
   private updateTimer: NodeJS.Timeout | undefined;
   private focus: string | undefined;
   private depth: number;
+  private folderScope: string | undefined;
 
   public static async createOrShow(
     context: vscode.ExtensionContext,
@@ -53,6 +56,9 @@ export class GraphPanel {
       GraphPanel.current.panel.reveal(column, false);
       if (options.focus) {
         GraphPanel.current.setFocus(options.focus, options.depth ?? 1);
+      }
+      if (options.folder !== undefined) {
+        GraphPanel.current.setFolderScope(options.folder);
       }
       return GraphPanel.current;
     }
@@ -88,6 +94,7 @@ export class GraphPanel {
     this.panel = panel;
     this.focus = options.focus;
     this.depth = options.depth ?? 1;
+    this.folderScope = options.folder;
 
     this.panel.webview.html = this.getHtml(this.panel.webview);
 
@@ -138,6 +145,9 @@ export class GraphPanel {
         this.postActiveFile(vscode.window.activeTextEditor?.document.uri);
         if (this.focus) {
           this.postFocus(this.focus, this.depth);
+        }
+        if (this.folderScope !== undefined) {
+          this.postScope(this.folderScope);
         }
         break;
       }
@@ -263,6 +273,20 @@ export class GraphPanel {
     this.focus = rel;
     this.depth = depth;
     this.postFocus(rel, depth);
+  }
+
+  /** 切换展示范围；空字符串代表整个工作区 */
+  public setFolderScope(rel: string): void {
+    this.folderScope = rel;
+    this.focus = undefined;
+    this.postScope(rel);
+  }
+
+  private postScope(rel: string): void {
+    if (!this.ready) {
+      return;
+    }
+    void this.panel.webview.postMessage({ type: 'scope', folder: rel || null });
   }
 
   private readConfig(): UiConfig {
@@ -391,6 +415,12 @@ export class GraphPanel {
         <button id="panel-close" class="icon-btn small" title="关闭">×</button>
       </div>
       <div class="panel-body">
+        <section class="sec">
+          <h4>图谱范围</h4>
+          <select id="s-scope" class="wide-select"></select>
+          <p class="sec-note">只展示所选文件夹及其子文件夹中的笔记；与范围外笔记的连线会被忽略，互不相连的簇与孤立节点仍会保留。</p>
+        </section>
+
         <section class="sec">
           <h4>显示内容</h4>
           <label class="check"><input type="checkbox" id="f-orphans" /><span>孤立笔记</span></label>
