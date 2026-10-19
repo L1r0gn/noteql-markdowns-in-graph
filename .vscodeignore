@@ -5,6 +5,11 @@ out/**/*.map
 tsconfig.json
 .gitignore
 example-vault/**
+core/**
+**/*.mbt
+**/moon.pkg
+**/moon.mod
+docs/MOONBIT.md
 scripts/**
 **/.DS_Store
 *.vsix

@@ -7,3 +7,9 @@ npm-debug.log*
 scripts/preview*.html
 scripts/*.png
 .workbuddy/
+
+# MoonBit 构建缓存
+core/_build/
+core/.moon_db
+core/.mooncakes/
+core/pkg.generated.mbti

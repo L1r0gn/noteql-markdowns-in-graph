@@ -79,6 +79,7 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <title>预览</title>
+<meta name="core-wasm" content="../media/core.wasm" />
 <link rel="stylesheet" href="../media/graph.css" />
 <style>
   /* 模拟 VS Code Dark+ 主题变量，便于脱离编辑器截图 */

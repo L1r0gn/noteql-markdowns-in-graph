@@ -23,7 +23,7 @@ store.files.set(base + '/other/c.md', '# 孤立笔记\n');
 store.files.set(base + '/assets/pic.png', 'PNG');
 
 const output = { appendLine: (s) => console.log('   log>', s) };
-const context = { subscriptions: [] };
+const context = { subscriptions: [], extensionUri: { fsPath: path.resolve(__dirname, '..') } };
 
 (async () => {
   const indexer = new GraphIndexer(context, output);
