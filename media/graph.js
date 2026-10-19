@@ -115,6 +115,10 @@
     hoverCache: { id: null, neighbors: null }
   };
 
+  // 布局内核（MoonBit 编译的 Wasm）。加载失败时自动退回下面的 JS 实现。
+  var core = null;
+  var corePinned = [];
+
   // ------------------------------------------------------------ DOM
 
   function $(sel) {
@@ -489,7 +493,107 @@
       state.colorCache.clear();
     }
     state.dirty = true;
+    syncCore();
     updateStats();
+  }
+
+  // ------------------------------------------------------------ 布局内核
+
+  // MoonBit 编译出的 wasm 模块把字符串字面量以 `_` 模块的 externref
+  // 全局变量导入，这里用 Proxy 把「变量名」本身当作字符串值喂进去。
+  function coreStringImports() {
+    return new Proxy({}, {
+      get: function (_target, key) {
+        return typeof key === 'symbol' ? undefined : String(key);
+      },
+      has: function () {
+        return true;
+      }
+    });
+  }
+
+  function loadCore() {
+    var meta = document.querySelector('meta[name="core-wasm"]');
+    var url = meta ? meta.getAttribute('content') : '';
+    if (!url || typeof WebAssembly === 'undefined' || typeof fetch !== 'function') {
+      return Promise.resolve(null);
+    }
+    return fetch(url)
+      .then(function (response) {
+        return response.arrayBuffer();
+      })
+      .then(function (buffer) {
+        var mod = new WebAssembly.Module(buffer, {
+          builtins: ['js-string'],
+          importedStringConstants: '_'
+        });
+        var inst = new WebAssembly.Instance(mod, { _: coreStringImports() });
+        return inst.exports;
+      })
+      .then(function (exports) {
+        if (typeof exports.layout_step !== 'function') {
+          return null;
+        }
+        var probe = exports.core_selftest();
+        if (typeof probe !== 'string' || probe.indexOf('ok:') !== 0) {
+          return null;
+        }
+        return exports;
+      })
+      .catch(function (err) {
+        post({ type: 'log', message: '布局内核不可用，使用 JS 实现：' + err });
+        return null;
+      });
+  }
+
+  // 把当前的节点/连线灌进内核，并把坐标对齐（切图或换引擎时都会调用）
+  function syncCore() {
+    if (!core) {
+      return;
+    }
+    var nodes = state.nodes;
+    var links = state.links;
+    core.layout_reset();
+    corePinned = new Array(nodes.length);
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      n.coreIndex = i;
+      core.layout_add_node(n.degree || 0, n.radius || 5);
+      core.layout_seed(i, n.x, n.y);
+      corePinned[i] = false;
+    }
+    for (var j = 0; j < links.length; j++) {
+      var s = links[j].s;
+      var t = links[j].t;
+      if (s && t && s.coreIndex >= 0 && t.coreIndex >= 0) {
+        core.layout_add_link(s.coreIndex, t.coreIndex);
+      }
+    }
+  }
+
+  // 内核版单步：固定节点每帧重新钉住（拖拽时会写入新坐标），
+  // 其余节点由 Barnes-Hut 计算，最后把坐标读回渲染层。
+  function coreStep(alpha) {
+    var nodes = state.nodes;
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      if (n.fixed) {
+        core.layout_pin(i, n.x, n.y);
+        corePinned[i] = true;
+      } else if (corePinned[i]) {
+        core.layout_unpin(i);
+        corePinned[i] = false;
+      }
+    }
+    core.layout_step(alpha, state.settings.linkDistance, state.settings.repulsion);
+    for (i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!node.fixed) {
+        node.x = core.layout_x(i);
+        node.y = core.layout_y(i);
+      }
+    }
   }
 
   // ------------------------------------------------------------ 力导向模拟
@@ -663,6 +767,18 @@
     var rest = state.settings.linkDistance;
     var charge = 105 * state.settings.repulsion;
     var i;
+
+    if (core) {
+      coreStep(a);
+      state.alpha = a * 0.982;
+      if (state.alpha < 0.006) {
+        state.alpha = 0;
+        state.running = false;
+        persistSoon();
+      }
+      state.dirty = true;
+      return;
+    }
 
     // 1) 弹簧力
     for (i = 0; i < state.links.length; i++) {
@@ -2146,6 +2262,22 @@
     updateZoomLabel();
     window.requestAnimationFrame(frame);
     post({ type: 'ready' });
+
+    loadCore().then(function (exports) {
+      if (!exports) {
+        window.__graphCore = 'js';
+        return;
+      }
+      core = exports;
+      // 调试 / 冒烟测试用：外部可以读 window.__graphCore 判断当前引擎
+      window.__graphCore = 'wasm';
+      post({ type: 'log', message: '布局内核：MoonBit / wasm' });
+      if (state.nodes.length) {
+        // 用当前坐标热启动内核，避免切换引擎时跳变
+        syncCore();
+        reheat(0.5);
+      }
+    });
 
     window.setTimeout(function () {
       hintEl.classList.add('fade');
