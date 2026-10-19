@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "l1r0gn/markdowns-in-graph-core/layout"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Sim {
+  mut nodes : Array[SimNode]
+  mut links : Array[(Int32, Int32)]
+  mut seed : UInt64
+}
+pub fn Sim::add_link(Self, Int32, Int32) -> Unit
+pub fn Sim::add_node(Self, Int32, Double) -> Int32
+pub fn Sim::move_to(Self, Int32, Double, Double) -> Unit
+pub fn Sim::new() -> Self
+pub fn Sim::pin(Self, Int32, Double, Double) -> Unit
+pub fn Sim::reset(Self) -> Unit
+pub fn Sim::seed_at(Self, Int32, Double, Double) -> Unit
+pub fn Sim::step(Self, Double, Double, Double) -> Unit
+pub fn Sim::unpin(Self, Int32) -> Unit
+pub fn Sim::x(Self, Int32) -> Double
+pub fn Sim::y(Self, Int32) -> Double
+
+pub(all) struct SimNode {
+  mut x : Double
+  mut y : Double
+  mut vx : Double
+  mut vy : Double
+  mut radius : Double
+  mut degree : Int32
+  mut fixed : Bool
+}
+
+// Type aliases
+
+// Traits

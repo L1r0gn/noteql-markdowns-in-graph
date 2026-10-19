@@ -1,0 +1,68 @@
+import {
+  "l1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
+  "l1r0gn/markdowns-in-graph-core/vault" @vault,
+  "l1r0gn/markdowns-in-graph-core/layout" @layout,
+}
+
+pkgtype(kind: "foreign_library")
+
+options(
+  link: {
+    "js": {
+      "format": "esm",
+      "exports": [
+        "core_version",
+        "core_selftest",
+        "parse_markdown_json",
+        "vault_reset",
+        "vault_add_note",
+        "vault_add_attachment",
+        "vault_remove",
+        "vault_count",
+        "vault_note_count",
+        "vault_build_graph",
+        "vault_folders",
+        "vault_resolve",
+        "layout_reset",
+        "layout_add_node",
+        "layout_add_link",
+        "layout_seed",
+        "layout_pin",
+        "layout_unpin",
+        "layout_move",
+        "layout_step",
+        "layout_x",
+        "layout_y",
+        "layout_count",
+      ],
+    },
+    "wasm-gc": {
+      "use-js-builtin-string": true,
+      "exports": [
+        "core_version",
+        "core_selftest",
+        "parse_markdown_json",
+        "vault_reset",
+        "vault_add_note",
+        "vault_add_attachment",
+        "vault_remove",
+        "vault_count",
+        "vault_note_count",
+        "vault_build_graph",
+        "vault_folders",
+        "vault_resolve",
+        "layout_reset",
+        "layout_add_node",
+        "layout_add_link",
+        "layout_seed",
+        "layout_pin",
+        "layout_unpin",
+        "layout_move",
+        "layout_step",
+        "layout_x",
+        "layout_y",
+        "layout_count",
+      ],
+    },
+  },
+)

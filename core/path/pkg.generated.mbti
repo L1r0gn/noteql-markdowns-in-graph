@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "l1r0gn/markdowns-in-graph-core/path"
+
+// Values
+pub fn basename(String) -> String
+
+pub fn decode_uri(String) -> String
+
+pub fn depth(String) -> Int32
+
+pub fn dirname(String) -> String
+
+pub fn extname(String) -> String
+
+pub fn has_dot_segment(String) -> Bool
+
+pub fn join(String, String) -> String
+
+pub fn normalize(String) -> String
+
+pub fn strip_ext(String) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

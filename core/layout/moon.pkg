@@ -1,0 +1,3 @@
+// 本包只需要核心库（数学函数在 Double 上）。
+
+warnings = "-implicit_impl_as_method"
