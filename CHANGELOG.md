@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.0.0 — 2026-10-20
+
+### 重构：计算内核迁移到 MoonBit + WebAssembly
+
+插件的全部纯计算逻辑改用 **MoonBit** 实现，编译为 wasm-gc 模块，
+TypeScript 只保留 VS Code 适配层（枚举文件、读取内容、转发消息）。
+
+- 新增独立 MoonBit 模块 `core/`（`l1r0gn/markdowns-in-graph-core`）：
+  - `path` —— POSIX 路径运算与 URI 百分号解码
+  - `mdparse` —— 双链 / 标准链接 / 行内标签 / Frontmatter 标签扫描（字符级单遍，无正则回溯）
+  - `vault` —— 文件索引、Obsidian「最短路径优先」链接解析、图谱构建与统计
+  - `layout` —— Barnes-Hut 四叉树力导向布局（扁平对象池 + 确定性 PRNG）
+- 新增 `src/core/moonCore.ts`：wasm 优先、js 兜底的双后端加载器，
+  通过 `use-js-builtin-string` 让 MoonBit 的 `String` 直接映射为 JS 字符串
+- 新增 33 个 MoonBit 单元测试、TS ⇄ MoonBit 逐文件一致性回归、内核基准、
+  Webview 内核冒烟测试
+- `src/markdownParser.ts` 移入 `src/legacy/`，仅作为一致性回归与基准的参照实现
+- 版本号提升到 2.0.0；产物 `media/core.wasm` 与 `media/core.mjs` 随扩展分发
+
+### 兼容性
+
+- 图谱语义（节点、连线、度数、幽灵节点、附件规则、解析优先级）与 1.3.1 完全一致，
+  由 `npm run parity` 逐文件校验
+- 布局系数与 1.3.1 相同，视觉表现连续；差异是布局现在**可复现**
+- 所有命令、快捷键、配置项与消息协议保持不变
+
+
 ## 1.3.1 — 2026-10-19
 
 ### 修复

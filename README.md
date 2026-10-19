@@ -4,6 +4,10 @@
 
 界面与交互参照 Obsidian 的关系图谱（Graph View），纯 Canvas 2D 实现，不依赖任何第三方运行时库。
 
+自 **v2.0** 起，插件的计算内核（Markdown 解析、链接解析、图谱构建、力导向布局）用
+**MoonBit** 重写并编译为 WebAssembly，TypeScript 只保留 VS Code 适配层。
+详见 [MoonBit 内核](#moonbit-内核) 与 [`docs/MOONBIT.md`](docs/MOONBIT.md)。
+
 > 界面截图位于仓库 `docs/` 目录，见 `docs/SCREENSHOTS.md`。
 
 
@@ -21,6 +25,7 @@
 - [快捷键](#快捷键)
 - [命令](#命令)
 - [配置项](#配置项)
+- [MoonBit 内核](#moonbit-内核)
 - [实现原理](#实现原理)
 - [性能与已知限制](#性能与已知限制)
 - [常见问题](#常见问题)
@@ -303,37 +308,79 @@ npm run install:vsix
 
 ---
 
+## MoonBit 内核
+
+内核位于 `core/`，是一个独立的 MoonBit 模块（`l1r0gn/markdowns-in-graph-core`），
+用同一条命令即可产出两份产物：
+
+```bash
+npm run core:build      # → media/core.wasm (wasm-gc) + media/core.mjs (js)
+npm run core:test       # 33 个单元测试（moon test）
+npm run parity          # 逐文件比对 TypeScript 旧实现与 MoonBit 内核的解析结果
+npm run bench           # 解析 / 建索引 / 布局三组基准
+```
+
+| 包 | 职责 | 关键实现 |
+| --- | --- | --- |
+| `path` | POSIX 路径运算 | `dirname` / `normalize` / `extname` / URI 百分号解码 |
+| `mdparse` | Markdown 扫描 | 单次 `Array[Char]` 转换后按区间滑动，无正则、无回溯；跳过围栏代码、行内代码、HTML 注释 |
+| `vault` | 索引与构图 | `byPath` / `byName` 双索引；Obsidian「最短路径优先」解析；解析结果按目录缓存 |
+| `layout` | 力导向模拟 | 扁平四叉树对象池（Barnes-Hut）+ 空间哈希碰撞消解 + 确定性 PRNG |
+| 根包 | 宿主 ABI | `#export_name` 导出 23 个函数，跨边界只有 `String` 与数值 |
+
+**跨语言边界**
+
+- 字符串：`use-js-builtin-string` 让 MoonBit 的 `String` 直接映射成 JS 字符串（`wasm:js-string` 内建指令），不需要手写内存拷贝；模块里的字符串字面量以 `_` 模块的 `externref` 全局变量导入，宿主用一个 `Proxy` 把「变量名」当作值喂进去。
+- 坐标：布局接口全部是 `Int` / `Double`，Webview 每帧只做 `2N` 次坐标读取，不序列化整张图。
+- 降级：若运行时缺少 WasmGC / js-string 支持，`MoonCore.load()` 会自动退回 `core.mjs`（js 后端），接口完全一致。
+
 ## 实现原理
 
 ```
 工作区 .md 文件
      │  vscode.workspace.findFiles（并发读取，16 路）
      ▼
-markdownParser.ts   逐行解析：跳过代码块/行内代码，抽取 [[双链]]、[链接](...)、#标签
-     ▼
-indexer.ts          建立 byPath / byName 索引 → 解析目标 → 去重 → 生成 nodes/links/degree
+indexer.ts ────── 文本 ──────►  MoonBit 内核（core.wasm）
+                                 ├─ mdparse  双链 / 标准链接 / 标签 / Frontmatter
+                                 ├─ vault    索引 + 最短路径优先解析 + 构图
+                                 └─ layout   Barnes-Hut 力导向模拟
+     ◄──────────── JSON ─────────┘
      ▼
 graphPanel.ts       单例 Webview 面板，postMessage 推送图谱数据与配置
      ▼
-media/graph.js      Canvas 2D：力导向模拟 → 绘制 → 交互 → 筛选/搜索/聚焦
+media/graph.js      Canvas 2D 绘制与交互；每帧把当前坐标交给 core.wasm 迭代
 ```
 
-**布局算法**（`media/graph.js`）
+TypeScript 侧不再包含任何解析或图算法，只剩三件事：枚举文件、读取内容、转发消息。
+
+**布局算法**（`core/layout`）
 
 1. **弹簧力**：每条边把两端拉向 `linkDistance`，力与距离差成正比；
-2. **排斥力**：Barnes-Hut 四叉树近似万有斥力，θ = 0.9，避免 O(n²)；
+2. **排斥力**：Barnes-Hut 四叉树近似万有斥力，θ² = 0.81，避免 O(n²)；
 3. **向心力**：把整张图缓慢拉回原点，防止连通分量飘散；
 4. **碰撞消解**：空间哈希网格保证节点圆不重叠；
 5. **退火**：`alpha` 从 1 指数衰减到 0（约 300 帧），交互时局部重新加热。
 
+内核版与 JS 版使用同一套系数，因此替换引擎后视觉效果保持一致；
+区别在于四叉树节点来自预分配的对象池（每帧只重置计数器），
+并且所有随机扰动都来自固定种子的 LCG —— **同样的输入永远得到同样的布局**。
+
 **渲染优化**
 
 - 视口裁剪：完全在屏幕外的节点与连线不绘制
-- 连线按「普通 / 高亮 / 虚线」分批 `Path2D` 式描边，减少状态切换
+- 连线按「普通 / 高亮 / 虚线」分批描边，减少状态切换
 - `devicePixelRatio` 适配、`ResizeObserver` 自适应面板尺寸
 - 标签按缩放阈值与节点度数选择性绘制，带描边保证可读性
 
 ## 性能与已知限制
+
+本机基准（Node 22 / Windows，`npm run bench`，1200 篇合成笔记 / 2.7 MB / 96000 条链接）：
+
+| 场景 | 结果 |
+| --- | --- |
+| 端到端建索引（解析 + 解析链接 + 构图，全在 MoonBit 内） | ~250 ms，约 4.7k 篇/秒 |
+| 力导向布局（Barnes-Hut，1000 节点） | 1.2 ms/帧，约 815 帧/秒 |
+| 解析一致性 | 12 篇示例笔记 + 全部文档，与旧 TS 实现逐字段相同（`npm run parity`） |
 
 - 推荐规模：**≤ 3000 篇笔记 / ≤ 20000 条链接** 时交互流畅；再大建议用 `exclude` 缩小范围。
 - 仅索引工作区的**第一个文件夹**（多根工作区暂不支持跨根合并）。
@@ -374,9 +421,22 @@ media/graph.js      Canvas 2D：力导向模拟 → 绘制 → 交互 → 筛选
 
 ```bash
 npm install        # 安装依赖（typescript / @types/vscode / vsce）
+
+# MoonBit 内核（需要先安装 moon 工具链，见 docs/MOONBIT.md）
+npm run core:check # 内核类型检查
+npm run core:test  # 内核单元测试（33 个）
+npm run core:build # 编译 wasm-gc + js，产物写入 media/
+
+# TypeScript 适配层
 npm run compile    # 编译 src -> out
 npm run watch      # 监听编译
 npm run typecheck  # 仅类型检查
+
+# 质量闸门
+npm run parity     # TS 旧实现 ⇄ MoonBit 内核 逐文件一致性
+npm run bench      # 解析 / 建索引 / 布局基准
+npm run smoke      # 无头浏览器验证 Webview 真的用上了 wasm 内核
+
 npm run package    # 打包 vsix
 ```
 
@@ -387,6 +447,10 @@ npm run package    # 打包 vsix
 ```bash
 node scripts/preview.js                      # 生成静态预览页 scripts/preview.html ~ 浅色版
 node scripts/shot.js <url> <out.png> [ms]    # 用无头 Edge + CDP 截图（可视化调试）
+node scripts/smoke-core.js                   # 断言 Webview 用的是 MoonBit 内核
+node scripts/parity-check.js                 # 解析结果一致性
+node scripts/bench-core.js [篇数]            # 内核基准
+node scripts/build-core.js [--wasm|--js]     # 只构建其中一个后端
 node scripts/smoke-webview.js                # jsdom 冒烟测试：渲染/搜索/筛选/聚焦/菜单
 NODE_PATH=/tmp/vscode-stub/node_modules node scripts/test-indexer.js   # 索引器单测
 ```
@@ -398,14 +462,26 @@ markdowns-in-graph/
 ├── package.json           # 扩展清单：命令、快捷键、菜单、配置项
 ├── tsconfig.json          # TypeScript 编译配置（输出 out/）
 ├── .vscodeignore          # 打包时排除的文件
+├── core/                  # MoonBit 内核（本项目的主要实现）
+│   ├── moon.mod           # 模块清单
+│   ├── moon.pkg           # 根包：对宿主的 ABI 与 wasm/js 导出配置
+│   ├── abi.mbt            # 23 个导出函数的实现
+│   ├── path/              # POSIX 路径运算
+│   ├── mdparse/           # Markdown 双链 / 标签扫描器
+│   ├── vault/             # 索引、链接解析、构图、JSON 序列化
+│   └── layout/            # Barnes-Hut 力导向布局
 ├── src/
 │   ├── extension.ts       # 激活入口：注册命令、状态栏、事件转发
-│   ├── indexer.ts         # 扫描工作区、链接索引与解析、构图
-│   ├── markdownParser.ts  # 双链/标准链接/标签解析
+│   ├── indexer.ts         # 扫描工作区、把文本交给内核、转发 JSON
+│   ├── core/moonCore.ts   # 内核加载器（wasm 优先，js 兜底）与类型化门面
+│   ├── core/wasm.d.ts     # WebAssembly + WasmGC 字符串内建的最小类型声明
+│   ├── legacy/            # 重构前的 TS 解析器，仅用于一致性回归与基准对比
 │   ├── graphPanel.ts      # Webview 单例面板、消息协议、HTML 模板
 │   └── types.ts           # GraphNode / GraphLink / GraphData
 ├── media/
-│   ├── graph.js           # 前端：力导向模拟、绘制、交互、筛选
+│   ├── core.wasm          # MoonBit 内核（构建产物，随扩展一起打包）
+│   ├── core.mjs           # MoonBit 内核的 js 后端（兜底）
+│   ├── graph.js           # 前端：绘制、交互、筛选；布局调用 core.wasm
 │   └── graph.css          # 跟随 VS Code 主题的界面样式
 ├── docs/                  # 文档截图
 ├── example-vault/         # 示例笔记库（用于试玩）

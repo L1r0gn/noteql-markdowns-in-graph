@@ -1,8 +1,8 @@
 {
   "name": "markdowns-in-graph",
   "displayName": "Markdowns In Graph",
-  "description": "在 VS Code 中复刻 Obsidian 的关系图谱：双链解析、力导向布局、缩放/平移/拖拽、点击跳转、实时更新、筛选搜索与节点聚焦。",
-  "version": "1.3.1",
+  "description": "Obsidian 风格的关系图谱：用 MoonBit 编写核心引擎（Wasm），在 VS Code 中实现双链解析、力导向布局、缩放/平移/拖拽、点击跳转、实时更新与节点聚焦。",
+  "version": "2.0.0",
   "publisher": "L1r0gn",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -20,6 +20,9 @@
     "wikilink",
     "backlink",
     "knowledge graph",
+    "moonbit",
+    "wasm",
+    "webassembly",
     "双链",
     "关系图谱"
   ],
@@ -223,8 +226,14 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "typecheck": "tsc -p ./ --noEmit",
+    "core:build": "node scripts/build-core.js",
+    "core:test": "moon -C core test --target wasm-gc",
+    "core:check": "moon -C core check --target wasm-gc",
+    "parity": "node scripts/parity-check.js",
+    "bench": "node scripts/bench-core.js",
+    "smoke": "node scripts/preview.js && node scripts/smoke-core.js",
     "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links",
-    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-1.3.1.vsix"
+    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-2.0.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",
