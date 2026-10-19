@@ -67,8 +67,13 @@
 | `docs/preview-local.png` | 局部图谱 · 焦点节点 1 层邻域 |
 | `docs/preview-panel.png` | 筛选面板与右键菜单         |
 | `docs/preview-light.png` | 浅色主题              |
+| `docs/preview-v2-core.png` | v2.0 · 布局由 MoonBit/Wasm 内核计算 |
 
 更多说明见 `docs/SCREENSHOTS.md`；图标设计与可复用提示词见 `docs/ICON.md`。
+
+> 这张 v2.0 截图由 `npm run smoke` 同款流程生成：无头浏览器加载预览页，
+> 内核自检通过（`window.__graphCore === 'wasm'`）后连续跑 6 秒布局再截图。
+> 因为布局是确定性的，重复截图会得到像素级一致的结果。
 
 ---
 
