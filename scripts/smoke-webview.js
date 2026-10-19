@@ -273,6 +273,53 @@ function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
   }
   canvas.dispatchEvent(new window.MouseEvent('pointerleave', { bubbles: true }));
   await wait(80);
+
+  // 高缩放基线：适应视图后标签应几乎不透明
+  window.document.querySelector('#btn-fit').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  await wait(700);
+  labelCalls.length = 0;
+  window.dispatchEvent(new window.Event('resize'));
+  await wait(150);
+  const highAlphas = labelCalls.map((c) => c.alpha);
+  const highAvg = highAlphas.length
+    ? highAlphas.reduce((a, b) => a + b, 0) / highAlphas.length
+    : 0;
+  const highZoom = window.document.querySelector('#zoom-label').textContent;
+
+  // 缩到 35% 左右：低度数节点的标签应先淡出，仅保留较大节点
+  for (let i = 0; i < 16; i++) {
+    const zoom = parseFloat(window.document.querySelector('#zoom-label').textContent);
+    if (zoom <= 42) break;
+    const wheel = new window.MouseEvent('wheel', {
+      clientX: 640,
+      clientY: 410,
+      bubbles: true,
+      cancelable: true
+    });
+    wheel.deltaY = 120;
+    wheel.deltaMode = 0;
+    canvas.dispatchEvent(wheel);
+    await wait(50);
+  }
+  await wait(600);
+  labelCalls.length = 0;
+  window.dispatchEvent(new window.Event('resize'));
+  await wait(150);
+  const nodeCount = Number((/(\d+) 个节点/.exec(window.document.querySelector('#stats').textContent) || [0, 42])[1]);
+  const uniqueLabels = new Set(labelCalls.map((c) => c.text)).size;
+  const lowAlphas = labelCalls.map((c) => c.alpha);
+  const lowAvg = lowAlphas.length
+    ? lowAlphas.reduce((a, b) => a + b, 0) / lowAlphas.length
+    : 0;
+  const lowZoom = window.document.querySelector('#zoom-label').textContent;
+  console.log(
+    `标签透明度：${highZoom} 平均 ${highAvg.toFixed(2)} → ${lowZoom} 平均 ${lowAvg.toFixed(2)}，` +
+      `可见标签 ${uniqueLabels} / 节点 ${nodeCount}`
+  );
+  check('高缩放下标签清晰', highAvg > 0.7, highAvg.toFixed(2));
+  check('缩小后标签明显变淡', lowAvg < highAvg * 0.65, `${highAvg.toFixed(2)} → ${lowAvg.toFixed(2)}`);
+  check('缩小后仍有大节点标签可读', uniqueLabels > 0);
+
   for (let i = 0; i < 8; i++) {
     const wheel = new window.MouseEvent('wheel', {
       clientX: 640,

@@ -346,9 +346,10 @@
   }
 
   function radiusFor(node) {
-    var base = 3 + Math.min(7.5, Math.sqrt(node.degree || 0) * 1.55);
+    // v1.3.1：初始点大小减半，更接近 Obsidian 的点状图谱
+    var base = (3 + Math.min(7.5, Math.sqrt(node.degree || 0) * 1.55)) * 0.5;
     if (node.kind === 'unresolved') {
-      return Math.max(2.8, base * 0.7);
+      base = Math.max(1.4, base * 0.7);
     }
     return base * state.settings.nodeScale;
   }
@@ -630,7 +631,7 @@
             var dx = b.x - a.x;
             var dy = b.y - a.y;
             var dist = Math.sqrt(dx * dx + dy * dy);
-            var minDist = a.radius + b.radius + 5;
+            var minDist = a.radius + b.radius + 8;
             if (dist >= minDist) continue;
             if (dist < 0.001) {
               dx = (Math.random() - 0.5) * 0.8;
@@ -796,11 +797,11 @@
     if (!state.settings.showLabels) {
       return 0;
     }
-    var base = Math.max(0.1, state.settings.labelThreshold);
-    var sizeBonus = clamp((node.radius - 4) / 12, 0, 0.18);
-    var fadeStart = base + sizeBonus;
-    var fadeEnd = base * 0.55 + sizeBonus;
-    var t = (k - fadeEnd) / Math.max(0.001, fadeStart - fadeEnd);
+    var scale = Math.max(0.2, state.settings.labelThreshold / 0.5);
+    var screenRadius = node.radius * k; // 节点在屏幕上的实际半径
+    var fadeStart = 1.8 * scale; // 高于此值完全不透明
+    var fadeEnd = 0.7 * scale; // 低于此值完全隐藏
+    var t = (screenRadius - fadeEnd) / Math.max(0.001, fadeStart - fadeEnd);
     if (emphasis) {
       t = Math.max(t, 0.92);
     }
@@ -882,7 +883,7 @@
       var n = state.nodes[i];
       var sx = n.x * k + ox;
       var sy = n.y * k + oy;
-      var r = Math.max(2.2, n.radius * k);
+      var r = Math.max(1.1, n.radius * k);
       if (sx < -r - 120 || sx > state.W + r + 120 || sy < -r - 60 || sy > state.H + r + 60) {
         continue;
       }
@@ -1040,7 +1041,7 @@
       var dx = n.x - wx;
       var dy = n.y - wy;
       var d2 = dx * dx + dy * dy;
-      var r = n.radius + 5 / k;
+      var r = n.radius + 6 / k;
       if (d2 <= r * r && d2 < bestD) {
         best = n;
         bestD = d2;

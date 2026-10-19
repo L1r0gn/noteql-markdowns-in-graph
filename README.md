@@ -91,8 +91,8 @@ npm run compile
 
 ```bash
 npm install
-npm run package          # 产出 markdowns-in-graph-1.3.0.vsix
-code --install-extension markdowns-in-graph-1.3.0.vsix
+npm run package          # 产出 markdowns-in-graph-1.3.1.vsix
+code --install-extension markdowns-in-graph-1.3.1.vsix
 ```
 
 也可以在 VS Code 中：`扩展` 面板右上角 `...` → `从 VSIX 安装...`，选择生成的 `.vsix` 文件。
