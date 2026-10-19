@@ -13,3 +13,6 @@ core/_build/
 core/.moon_db
 core/.mooncakes/
 core/**/pkg.generated.mbti
+
+# 参赛申报材料（本地保留，不入库）
+申报书.md
