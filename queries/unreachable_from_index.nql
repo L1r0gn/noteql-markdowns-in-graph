@@ -1,0 +1,5 @@
+-- 从首页出发不可达的笔记：递归图查询的典型用法。
+SELECT n.path, distance('首页.md', n.path) AS hops
+FROM note n
+WHERE distance('首页.md', n.path) < 0
+ORDER BY n.path

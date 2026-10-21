@@ -2054,6 +2054,9 @@
     $('#btn-fit').addEventListener('click', function () {
       fitView(true);
     });
+    $('#btn-query').addEventListener('click', function () {
+      post({ type: 'openQuery' });
+    });
     $('#btn-refresh').addEventListener('click', function () {
       post({ type: 'refresh' });
     });

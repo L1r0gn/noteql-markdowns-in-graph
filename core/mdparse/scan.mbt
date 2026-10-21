@@ -40,7 +40,7 @@ pub(all) struct RawLink {
   kind : LinkKind
   /// 1 基行号
   line : Int
-}
+} derive(Eq, Debug)
 
 ///|
 pub(all) struct ParsedDoc {

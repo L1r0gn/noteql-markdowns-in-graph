@@ -4,7 +4,8 @@
  */
 const path = require('path');
 const vscode = require('vscode');
-const { GraphIndexer } = require(path.join('F:/markdowns_in_graph', 'out/indexer.js'));
+const root = path.resolve(__dirname, '..');
+const { GraphIndexer } = require(path.join(root, 'out/indexer.js'));
 
 const store = vscode.__store;
 const base = 'F:/ws';
@@ -38,6 +39,10 @@ const context = { subscriptions: [], extensionUri: { fsPath: path.resolve(__dirn
   console.log('toRel ->', indexer.toRel(vscode.Uri.file(base + '/notes/a.md')));
   console.log('uriFor ->', indexer.uriFor('notes/b.md').fsPath);
 
+  const queryResult = await indexer.runQuery(
+    'SELECT count(*) AS n FROM note n',
+    true
+  );
   const checks = [
     ['笔记数量为 5', graph.stats.notes === 5],
     ['附件仅 1 个', graph.stats.attachments === 1],
@@ -46,7 +51,8 @@ const context = { subscriptions: [], extensionUri: { fsPath: path.resolve(__dirn
     ['索引到标签', !!graph.nodes.find((n) => n.id === 'notes/sub/deep.md' && n.tags.includes('层级/深'))],
     ['未解析节点标签正确', !!graph.nodes.find((n) => n.id === 'u:不存在的笔记')],
     ['附件被引用进入图谱', !!graph.nodes.find((n) => n.id === 'assets/pic.png')],
-    ['孤立笔记存在', !!graph.nodes.find((n) => n.id === 'other/c.md' && n.degree === 0)]
+    ['孤立笔记存在', !!graph.nodes.find((n) => n.id === 'other/c.md' && n.degree === 0)],
+    ['NoteQL 查询可用', queryResult.ok === true && queryResult.rows?.[0]?.[0] === 5]
   ];
   let failed = 0;
   for (const [name, ok] of checks) {

@@ -45,3 +45,33 @@ export interface GraphData {
   generatedAt: number;
   rootName: string;
 }
+
+/** NoteQL 单元格：与 MoonBit 内核的 Value 一一对应 */
+export type QueryValue = string | number | boolean | null | string[];
+
+export interface NoteQLResult {
+  ok: boolean;
+  error?: string;
+  cached?: boolean;
+  dependencies?: string[];
+  columns?: string[];
+  rows?: QueryValue[][];
+  rowCount?: number;
+  totalRows?: number;
+  scanned?: number;
+  /** 扩展宿主侧测量的耗时（毫秒） */
+  elapsedMs?: number;
+}
+
+export interface QueryRelation {
+  name: string;
+  columns: string[];
+}
+
+export interface QueryStats {
+  hits: number;
+  misses: number;
+  cacheSize: number;
+  revision: number;
+  changeSeq: number[];
+}

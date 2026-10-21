@@ -1,0 +1,4 @@
+-- 断链清单：链接目标不存在，适合直接定位到行号。
+SELECT u.from AS path, u.line, u.raw, u.target AS target
+FROM unresolved u
+ORDER BY u.from, u.line

@@ -17,12 +17,16 @@ let core_vault : @vault.Vault = @vault.Vault::new()
 /// 内核状态：Webview 的力导向布局。
 let core_sim : @layout.Sim = @layout.Sim::new()
 
+///|
+/// 内核状态：NoteQL 查询缓存。
+let core_engine : @query.Engine = @query.Engine::new()
+
 // ---------------------------------------------------------------- 元信息
 
 ///|
 #export_name("core_version")
 pub fn core_version() -> String {
-  "0.1.0"
+  "2.1.0"
 }
 
 ///|
@@ -40,10 +44,13 @@ pub fn core_selftest() -> String {
   let payload = core_vault.build_graph(16, 0, "selftest")
   let nodes = payload.nodes.length()
   vault_reset()
-  if nodes == 2 {
-    "ok:2"
-  } else {
+  let query_probe = noteql_selftest()
+  if nodes != 2 {
     "fail:graph:" + nodes.to_string()
+  } else if !query_probe.has_prefix("ok:") {
+    "fail:query:" + query_probe
+  } else {
+    "ok:2"
   }
 }
 
@@ -90,11 +97,7 @@ pub fn parse_markdown_json(text : String) -> String {
 ///|
 #export_name("vault_reset")
 pub fn vault_reset() -> Unit {
-  core_vault.files.clear()
-  core_vault.order.clear()
-  core_vault.byPath.clear()
-  core_vault.byName.clear()
-  core_vault.cache.clear()
+  core_vault.clear()
 }
 
 ///|
@@ -150,6 +153,77 @@ pub fn vault_resolve(from_rel : String, target : String) -> String {
   match core_vault.resolve(from_rel, target) {
     Some(rel) => rel
     None => ""
+  }
+}
+
+// ---------------------------------------------------------------- NoteQL
+
+///|
+/// 执行一条 NoteQL 查询。`use_cache` 非 0 时允许复用上次结果。
+#export_name("noteql_run")
+pub fn noteql_run(source : String, use_cache : Int) -> String {
+  match core_engine.run(core_vault, source, use_cache != 0) {
+    EOk(response) => @query.response_json(response)
+    EErr(err) => @query.error_json(err)
+  }
+}
+
+///|
+/// 内置关系与列清单，供查询面板补全与文档展示。
+#export_name("noteql_relations")
+pub fn noteql_relations() -> String {
+  @query.relation_catalog_json()
+}
+
+///|
+/// 缓存命中率与变更序列，供基准测试与调试。
+#export_name("noteql_stats")
+pub fn noteql_stats() -> String {
+  core_engine.stats_json(core_vault)
+}
+
+///|
+#export_name("noteql_reset_cache")
+pub fn noteql_reset_cache() -> Unit {
+  core_engine.reset()
+}
+
+///|
+/// 查询引擎自检：独立构造一个临时 vault，不污染当前工作区索引。
+#export_name("noteql_selftest")
+pub fn noteql_selftest() -> String {
+  let vault = @vault.Vault::new()
+  vault.upsert_note("a.md", 1, 1.0, "[[b]] #draft")
+  vault.upsert_note("b.md", 1, 2.0, "[[a]] #done")
+  vault.upsert_note("c.md", 1, 3.0, "[[missing]]")
+  let engine = @query.Engine::new()
+  let source = "SELECT n.path, n.degree FROM note n WHERE n.tags CONTAINS 'draft'"
+  match engine.run(vault, source, true) {
+    EErr(err) => "fail:" + err
+    EOk(first) => {
+      if first.result.rows.length() != 1 {
+        return "fail:rows:" + first.result.rows.length().to_string()
+      }
+      match engine.run(vault, source, true) {
+        EErr(err) => "fail:cached:" + err
+        EOk(second) =>
+          if !second.cached {
+            "fail:cache-miss"
+          } else {
+            // 改一篇无关笔记的内容，依赖 note/link/tag/name 的查询应失效。
+            vault.upsert_note("c.md", 1, 4.0, "[[missing]] [[b]]")
+            match engine.run(vault, source, true) {
+              EErr(err) => "fail:after-edit:" + err
+              EOk(third) =>
+                if third.cached {
+                  "fail:stale"
+                } else {
+                  "ok:1"
+                }
+            }
+          }
+      }
+    }
   }
 }
 

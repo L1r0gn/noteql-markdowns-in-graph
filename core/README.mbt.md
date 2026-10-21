@@ -11,15 +11,24 @@
 | `mdparse` | Markdown 扫描器：双链 `[[a]]`、`![[a]]`、`[t](a.md)`、行内标签、Frontmatter 标签、代码围栏 |
 | `vault` | 工作区索引、Obsidian「最短路径优先」链接解析、图谱构建与统计 |
 | `layout` | Barnes-Hut 四叉树力导向布局 + 网格碰撞消解 |
+| `query` | **NoteQL**：SQL 风格的图查询、关系物化、BFS/SCC、聚合、依赖感知缓存 |
 | 根包 | 给宿主的 ABI：`#export_name` 导出的字符串 / 数值接口 |
 
 ## 构建
 
 ```bash
 moon check --target wasm-gc
-moon test  --target wasm-gc
-moon build --target wasm-gc --release   # _build/wasm-gc/release/build/core.wasm
-moon build --target js --release        # _build/js/release/build/core.js
+moon test  --target wasm-gc              # 41 个测试
+moon build --target wasm-gc --release    # _build/wasm-gc/release/build/markdowns-in-graph-core.wasm
+moon build --target js --release         # _build/js/release/build/markdowns-in-graph-core.js
+```
+
+在仓库根目录也可以：
+
+```bash
+npm run core:check
+npm run core:test
+npm run core:build
 ```
 
 ## 宿主协议
@@ -29,9 +38,21 @@ moon build --target js --release        # _build/js/release/build/core.js
 
 ```text
 vault_reset()
-vault_add_note(rel, base, ext, size, mtime, text) -> idx
-vault_build_graph(max_tags) -> JSON
+vault_add_note(rel, size, mtime, text)
+vault_add_attachment(rel, size, mtime)
+vault_build_graph(max_tags, generated_at, root_name) -> JSON
+noteql_run(source, use_cache) -> JSON
 ```
 
 数值接口的布局 API 让 Webview 每帧只做 2N 次 `layout_x / layout_y` 调用，
 避免把整张图的坐标反复序列化成字符串。
+
+## NoteQL
+
+```text
+note  file  link  tag  unresolved  ambiguous  orphan  cycle
+distance  reachable  in_cycle  indegree  outdegree  degree
+```
+
+查询语言与语义见仓库的 `docs/NOTEQL.md`：
+<https://github.com/L1r0gn/markdowns-in-graph-moonbit/blob/main/docs/NOTEQL.md>

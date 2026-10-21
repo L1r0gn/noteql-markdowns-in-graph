@@ -1,8 +1,8 @@
 {
   "name": "markdowns-in-graph",
   "displayName": "Markdowns In Graph",
-  "description": "Obsidian 风格的关系图谱：用 MoonBit 编写核心引擎（Wasm），在 VS Code 中实现双链解析、力导向布局、缩放/平移/拖拽、点击跳转、实时更新与节点聚焦。",
-  "version": "2.0.0",
+  "description": "Obsidian 风格的关系图谱与 NoteQL 查询引擎：MoonBit/Wasm 内核负责双链解析、力导向布局与增量图查询，可在 VS Code 与 CI 中复用。",
+  "version": "2.1.0",
   "publisher": "L1r0gn",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -20,6 +20,9 @@
     "wikilink",
     "backlink",
     "knowledge graph",
+    "noteql",
+    "query",
+    "datalog",
     "moonbit",
     "wasm",
     "webassembly",
@@ -31,6 +34,7 @@
     "onCommand:markdownsInGraph.show",
     "onCommand:markdownsInGraph.showLocal",
     "onCommand:markdownsInGraph.showFolder",
+    "onCommand:markdownsInGraph.query",
     "onCommand:markdownsInGraph.refresh"
   ],
   "main": "./out/extension.js",
@@ -53,6 +57,12 @@
         "title": "打开指定文件夹的图谱",
         "category": "关系图谱",
         "icon": "$(folder-opened)"
+      },
+      {
+        "command": "markdownsInGraph.query",
+        "title": "运行 NoteQL 查询",
+        "category": "关系图谱",
+        "icon": "$(search)"
       },
       {
         "command": "markdownsInGraph.refresh",
@@ -78,6 +88,11 @@
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
         "when": "markdownsInGraph.panelVisible"
+      },
+      {
+        "command": "markdownsInGraph.query",
+        "key": "ctrl+alt+q",
+        "mac": "cmd+alt+q"
       }
     ],
     "menus": {
@@ -113,6 +128,10 @@
         },
         {
           "command": "markdownsInGraph.showFolder",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "markdownsInGraph.query",
           "when": "workspaceFolderCount > 0"
         }
       ]
@@ -231,9 +250,13 @@
     "core:check": "moon -C core check --target wasm-gc",
     "parity": "node scripts/parity-check.js",
     "bench": "node scripts/bench-core.js",
+    "noteql": "node scripts/noteql.mjs",
+    "noteql:test": "node scripts/noteql-test.mjs",
+    "noteql:bench": "node scripts/noteql-bench.mjs",
+    "preview:query": "node scripts/query-preview.js",
     "smoke": "node scripts/preview.js && node scripts/smoke-core.js",
     "package": "npm run compile && vsce package --no-dependencies --allow-missing-repository --no-rewrite-relative-links",
-    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-2.0.0.vsix"
+    "install:vsix": "npm run package && code --install-extension markdowns-in-graph-2.1.0.vsix"
   },
   "devDependencies": {
     "@types/node": "^20.11.30",

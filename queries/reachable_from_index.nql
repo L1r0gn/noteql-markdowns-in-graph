@@ -1,0 +1,5 @@
+-- 从首页出发的可达笔记与跳数。
+SELECT n.path, distance('首页.md', n.path) AS hops
+FROM note n
+WHERE distance('首页.md', n.path) >= 0
+ORDER BY hops, n.path

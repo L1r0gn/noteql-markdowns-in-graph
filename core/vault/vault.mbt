@@ -36,6 +36,21 @@ pub(all) struct FolderStat {
 }
 
 ///|
+/// 变更序列的下标。查询引擎按这几类变更判断缓存是否需要失效：
+/// 文件名变化会改变同名链接的归属，因此和链接变化同等重要。
+pub let change_note : Int = 0
+
+pub let change_link : Int = 1
+
+pub let change_tag : Int = 2
+
+pub let change_name : Int = 3
+
+pub let change_file : Int = 4
+
+pub let change_slot_count : Int = 5
+
+///|
 pub(all) struct Vault {
   /// 精确路径 -> 记录
   files : Map[String, FileEntry]
@@ -48,11 +63,125 @@ pub(all) struct Vault {
   /// 解析结果缓存：目录 -> (原始目标 -> 精确路径)，空串表示解析失败。
   /// 大型笔记库里同一个目标会被反复引用，这里省掉重复的字符串归一化。
   cache : Map[String, Map[String, String]]
+  /// 各类变更的累计次数。查询缓存保存一份快照，逐项比较即可判断是否失效。
+  mut change_seq : Array[Int]
+  mut revision : Int
 }
 
 ///|
 pub fn Vault::new() -> Vault {
-  { files: Map([]), order: [], byPath: Map([]), byName: Map([]), cache: Map([]) }
+  {
+    files: Map([]),
+    order: [],
+    byPath: Map([]),
+    byName: Map([]),
+    cache: Map([]),
+    change_seq: [0, 0, 0, 0, 0],
+    revision: 0,
+  }
+}
+
+///|
+fn Vault::bump(self : Vault, slot : Int) -> Unit {
+  if slot >= 0 && slot < self.change_seq.length() {
+    self.change_seq[slot] = self.change_seq[slot] + 1
+  }
+  self.revision = self.revision + 1
+}
+
+///|
+fn Vault::bump_all(self : Vault) -> Unit {
+  for i = 0; i < self.change_seq.length(); i = i + 1 {
+    self.change_seq[i] = self.change_seq[i] + 1
+  }
+  self.revision = self.revision + 1
+}
+
+///|
+pub fn Vault::change_snapshot(self : Vault) -> Array[Int] {
+  self.change_seq.copy()
+}
+
+///|
+pub fn Vault::change_revision(self : Vault) -> Int {
+  self.revision
+}
+
+///|
+fn same_strings(a : Array[String], b : Array[String]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for i = 0; i < a.length(); i = i + 1 {
+    if a[i] != b[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn same_links(a : Array[@mdparse.RawLink], b : Array[@mdparse.RawLink]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for i = 0; i < a.length(); i = i + 1 {
+    if a[i] != b[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub fn Vault::clear(self : Vault) -> Unit {
+  self.files.clear()
+  self.order.clear()
+  self.byPath.clear()
+  self.byName.clear()
+  self.cache.clear()
+  self.bump_all()
+}
+
+///|
+/// 按路径字典序返回所有笔记。查询与构图都需要稳定的行顺序。
+pub fn Vault::notes(self : Vault) -> Array[FileEntry] {
+  let out : Array[FileEntry] = []
+  for rel in self.order {
+    match self.files.get(rel) {
+      Some(entry) =>
+        if entry.kind == FileKind::Note {
+          out.push(entry)
+        }
+      None => ()
+    }
+  }
+  out.sort_by(fn(a, b) { a.rel.compare(b.rel) })
+  out
+}
+
+///|
+/// 同名候选：用于解释「这条链接为什么有歧义」。
+/// 路径式目标（含 `/`、`.` 前缀）不在候选范围内，交给常规解析。
+pub fn Vault::candidates(self : Vault, raw_target : String) -> Array[String] {
+  let view = raw_target.trim()
+  if view == "" {
+    return []
+  }
+  let lower = view.to_lower().to_owned()
+  if lower.contains("/") || lower.has_prefix(".") {
+    return []
+  }
+  let name = @path.basename(lower)
+  let trimmed = strip_note_ext(name)
+  match self.byName.get(trimmed) {
+    Some(list) => list.copy()
+    None =>
+      match self.byName.get(name) {
+        Some(list) => list.copy()
+        None => []
+      }
+  }
 }
 
 ///|
@@ -132,6 +261,18 @@ pub fn Vault::upsert_note(
   let base = @path.strip_ext(@path.basename(rel))
   let ext = @path.extname(rel)
   let parsed = @mdparse.parse_markdown(text)
+  let previous = self.files.get(rel)
+  let mut link_changed = true
+  let mut tag_changed = true
+  let mut name_changed = true
+  match previous {
+    Some(old) => {
+      link_changed = !same_links(old.links, parsed.links)
+      tag_changed = !same_strings(old.tags, parsed.tags)
+      name_changed = old.base != base
+    }
+    None => ()
+  }
   let entry : FileEntry = {
     rel,
     dir: @path.dirname(rel),
@@ -151,6 +292,17 @@ pub fn Vault::upsert_note(
     self.order.push(rel)
   }
   self.index_entry(entry)
+  self.bump(change_note)
+  self.bump(change_file)
+  if link_changed {
+    self.bump(change_link)
+  }
+  if tag_changed {
+    self.bump(change_tag)
+  }
+  if name_changed {
+    self.bump(change_name)
+  }
 }
 
 ///|
@@ -163,6 +315,12 @@ pub fn Vault::upsert_attachment(
 ) -> Unit {
   let base = @path.strip_ext(@path.basename(rel))
   let ext = @path.extname(rel)
+  let previous = self.files.get(rel)
+  let mut name_changed = true
+  match previous {
+    Some(old) => name_changed = old.base != base
+    None => ()
+  }
   let entry : FileEntry = {
     rel,
     dir: @path.dirname(rel),
@@ -182,6 +340,10 @@ pub fn Vault::upsert_attachment(
     self.order.push(rel)
   }
   self.index_entry(entry)
+  self.bump(change_file)
+  if name_changed {
+    self.bump(change_name)
+  }
 }
 
 ///|
@@ -202,6 +364,7 @@ pub fn Vault::remove(self : Vault, rel : String) -> Unit {
       for item in next {
         self.order.push(item)
       }
+      self.bump_all()
     }
     None => ()
   }

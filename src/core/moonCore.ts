@@ -19,7 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
 
-import type { GraphData } from '../types';
+import type { GraphData, NoteQLResult, QueryRelation, QueryStats } from '../types';
 
 /** 内核后端类型 */
 export type CoreBackend = 'wasm' | 'js';
@@ -39,6 +39,12 @@ export interface CoreExports {
   vault_build_graph(maxTags: number, generatedAt: number, rootName: string): string;
   vault_folders(): string;
   vault_resolve(fromRel: string, target: string): string;
+
+  noteql_run(source: string, useCache: number): string;
+  noteql_relations(): string;
+  noteql_stats(): string;
+  noteql_reset_cache(): void;
+  noteql_selftest(): string;
 
   layout_reset(): void;
   layout_add_node(degree: number, radius: number): void;
@@ -197,6 +203,34 @@ export class MoonCore {
 
   public parseMarkdown(text: string): CoreParsedMarkdown {
     return JSON.parse(this.api.parse_markdown_json(text)) as CoreParsedMarkdown;
+  }
+
+  // ------------------------------------------------------------ NoteQL
+
+  /** 执行一条 NoteQL 查询；时间由宿主侧测量，便于把网络/加载开销算进去。 */
+  public runQuery(source: string, useCache = true): NoteQLResult {
+    const started = performance.now();
+    const result = JSON.parse(
+      this.api.noteql_run(source, useCache ? 1 : 0)
+    ) as NoteQLResult;
+    result.elapsedMs = performance.now() - started;
+    return result;
+  }
+
+  public queryRelations(): QueryRelation[] {
+    return JSON.parse(this.api.noteql_relations()) as QueryRelation[];
+  }
+
+  public queryStats(): QueryStats {
+    return JSON.parse(this.api.noteql_stats()) as QueryStats;
+  }
+
+  public resetQueryCache(): void {
+    this.api.noteql_reset_cache();
+  }
+
+  public querySelftest(): string {
+    return this.api.noteql_selftest();
   }
 
   // ------------------------------------------------------------ 布局

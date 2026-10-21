@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 import { MoonCore } from './core/moonCore';
-import { GraphData } from './types';
+import { GraphData, NoteQLResult, QueryRelation, QueryStats } from './types';
 
 const NOTE_EXT = new Set(['.md', '.markdown']);
 /** 只枚举需要参与图谱的文件类型，避免在大型仓库里遍历所有源码 */
@@ -425,5 +425,25 @@ export class GraphIndexer implements vscode.Disposable {
   /** 诊断：把链接目标解析成真实路径（供测试与问题排查使用） */
   public resolveLink(fromRel: string, target: string): string | undefined {
     return this.core?.resolve(fromRel, target);
+  }
+
+  // ---------------------------------------------------------------- NoteQL
+
+  /** 查询由 MoonBit 内核执行；TS 只负责把结果交给 Webview。 */
+  public async runQuery(source: string, useCache = true): Promise<NoteQLResult> {
+    const core = await this.ensureCore();
+    return core.runQuery(source, useCache);
+  }
+
+  public queryRelations(): QueryRelation[] {
+    return this.core?.queryRelations() ?? [];
+  }
+
+  public queryStats(): QueryStats | undefined {
+    return this.core?.queryStats();
+  }
+
+  public resetQueryCache(): void {
+    this.core?.resetQueryCache();
   }
 }

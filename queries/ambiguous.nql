@@ -1,0 +1,4 @@
+-- 歧义链接：同名文件有多个候选，当前按「同目录优先、层级最浅」选择。
+SELECT a.from AS path, a.line, a.raw, a.candidates
+FROM ambiguous a
+ORDER BY a.from, a.line

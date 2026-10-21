@@ -1,0 +1,4 @@
+-- 引用环：位于有向环上的笔记。
+SELECT c.path, c.out_degree
+FROM cycle c
+ORDER BY c.path

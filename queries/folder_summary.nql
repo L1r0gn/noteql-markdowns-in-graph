@@ -1,0 +1,5 @@
+-- 目录概览：每个目录的笔记数、入链总数与出链总数。
+SELECT n.folder, count(*) AS notes, sum(n.in_degree) AS inbound, sum(n.out_degree) AS outbound
+FROM note n
+GROUP BY n.folder
+ORDER BY notes DESC, n.folder

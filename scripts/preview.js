@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const root = 'F:/markdowns_in_graph';
+const root = path.resolve(__dirname, '..');
 const src = fs.readFileSync(path.join(root, 'src/graphPanel.ts'), 'utf8');
 const bodyStart = src.indexOf('<body>') + '<body>'.length;
 const bodyEnd = src.indexOf('<script nonce');

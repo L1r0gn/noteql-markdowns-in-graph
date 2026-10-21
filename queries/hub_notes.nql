@@ -1,0 +1,5 @@
+-- 枢纽笔记：按总连接数排序。
+SELECT n.path, n.degree, indegree(n.path) AS in_deg, outdegree(n.path) AS out_deg
+FROM note n
+ORDER BY n.degree DESC, n.path
+LIMIT 10

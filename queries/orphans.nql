@@ -1,0 +1,4 @@
+-- 孤立笔记：既没有入链也没有出链。
+SELECT o.path, o.degree
+FROM orphan o
+ORDER BY o.path

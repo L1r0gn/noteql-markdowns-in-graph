@@ -1,0 +1,5 @@
+-- 草稿体检：带 #draft 标签、但没有任何入链的笔记。
+SELECT n.path, indegree(n.path) AS refs
+FROM note n
+WHERE n.tags CONTAINS 'draft' AND indegree(n.path) = 0
+ORDER BY n.path

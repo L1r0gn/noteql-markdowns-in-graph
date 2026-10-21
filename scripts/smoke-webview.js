@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const root = 'F:/markdowns_in_graph';
+const root = path.resolve(__dirname, '..');
 const panelSrc = fs.readFileSync(path.join(root, 'src/graphPanel.ts'), 'utf8');
 const bodyStart = panelSrc.indexOf('<body>') + '<body>'.length;
 const bodyEnd = panelSrc.indexOf('<script nonce');

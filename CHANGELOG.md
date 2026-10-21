@@ -1,5 +1,63 @@
 # Changelog
 
+## 2.1.0 — 2026-10-21
+
+### 新增：NoteQL 查询与增量复用引擎
+
+在 v2.0 的解析/布局底座之上新增 `core/query`，把知识库变成可查询、可增量复用的关系层。
+
+- **查询语言**：`SELECT ... FROM ... WHERE ... GROUP BY ... HAVING ... ORDER BY ... LIMIT`
+  - 支持 `DISTINCT`、别名、`AND/OR/NOT`、`LIKE`、`CONTAINS`、`IN`、`IS NULL`
+  - 聚合：`count(*)` / `count(DISTINCT ...)` / `sum` / `avg` / `min` / `max`
+  - 标量：`lower` / `upper` / `length` / `abs` / `coalesce` / `startswith` / `endswith`
+- **内置关系**：`note` / `file` / `link` / `tag` / `unresolved` / `ambiguous` /
+  `orphan` / `cycle`
+- **图函数**：`distance` / `reachable` / `in_cycle` / `indegree` / `outdegree` / `degree`
+  - BFS 按源节点缓存结果；环检测使用 Kosaraju SCC
+- **语义检查**：未知关系/列、聚合写在 `WHERE`、分组不一致、聚合嵌套等查询直接拒绝
+- **增量缓存**：`vault` 维护 `note/link/tag/name/file` 五条变更序列，查询保存依赖快照；
+  只改链接时 `tag` 查询命中，只改标签时 `link` 查询命中
+- **按需建图**：只有 `note` / `orphan` / `cycle` 或图函数才构建完整图索引
+
+### 新增：CLI 与 CI
+
+- `scripts/noteql.mjs`：`--vault`、`--file`、`--queries`、`--format table|json|csv|sarif`、
+  `--no-cache`、`--fail-on-results`、`--list-relations`、`--stats`
+- `queries/`：10 条示例查询（断链、歧义、孤立、环、草稿体检、枢纽、目录统计、可达性、标签）
+- `--format sarif` 可接 GitHub code scanning；`--fail-on-results` 可作为 CI 闸门
+
+### 新增：VS Code 查询面板
+
+- 命令 `关系图谱: 运行 NoteQL 查询`，快捷键 `Ctrl+Alt+Q` / `Cmd+Alt+Q`
+- 图谱工具栏放大镜按钮
+- 查询编辑器、示例查询、关系清单、结果表、缓存统计
+- 点击结果行跳到文件行号；编辑文件后自动重跑（可关闭）
+- `media/query.js` / `media/query.css`，静态预览：`npm run preview:query`
+
+### 内核
+
+- 新增 `noteql_run` / `noteql_relations` / `noteql_stats` / `noteql_reset_cache` /
+  `noteql_selftest` ABI
+- `core_version` 提升到 `2.1.0`
+- 新增 `vault` 细粒度变更序列与 `candidates()` 歧义候选查询
+- MoonBit 单元测试从 33 增至 41；新增 JS/CLI 冒烟测试与查询基准
+
+### 性能（本机 Node 24 / Windows，1200 篇 / 约 48,000 条链接）
+
+- 建索引 ~198 ms
+- `tag` 冷查询 ~8.3 ms，热缓存 ~0.22 ms
+- `indegree` 图查询冷 ~160 ms
+- 递归 `distance` 冷 ~84 ms
+- 只改链接后 `tag` 查询 ~0.22 ms（命中）；改标签后 ~2.5 ms（重算）
+
+### 兼容性
+
+- 图谱命令、快捷键、配置项与消息协议保持不变
+- 解析/构图/布局语义不变，`npm run parity` 继续通过
+- NoteQL 是附加能力，不改变预览渲染或图谱写实
+- 已知限制：单关系 `FROM`、无 `JOIN`/子查询/`UNION`、`GROUP BY` 只支持列、
+  增量是结果级依赖失效、缓存上限 64 条
+
 ## 2.0.0 — 2026-10-20
 
 ### 重构：计算内核迁移到 MoonBit + WebAssembly

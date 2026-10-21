@@ -1,0 +1,5 @@
+import {
+  "l1r0gn/markdowns-in-graph-core/vault" @vault,
+}
+
+warnings = "-implicit_impl_as_method"

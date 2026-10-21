@@ -13,7 +13,7 @@
 
 name = "l1r0gn/markdowns-in-graph-core"
 
-version = "0.1.0"
+version = "2.1.0"
 
 readme = "README.mbt.md"
 
@@ -24,10 +24,12 @@ keywords = [
   "wikilink",
   "knowledge-graph",
   "force-directed",
+  "query-language",
+  "datalog",
   "vscode",
   "wasm",
 ]
 
-description = "MoonBit core engine for Markdowns In Graph: wikilink parsing, vault indexing, link resolution, graph building and Barnes-Hut force layout."
+description = "MoonBit core engine for Markdowns In Graph: wikilink parsing, vault indexing, graph building, Barnes-Hut layout, and NoteQL — an incremental graph query engine with dependency-aware caching."
 
 preferred_target = "wasm-gc"

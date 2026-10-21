@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GraphIndexer } from './indexer';
 import { GraphPanel } from './graphPanel';
+import { QueryPanel } from './queryPanel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('Markdown Graph');
@@ -78,6 +79,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
 
       await GraphPanel.createOrShow(context, indexer, output, { folder: rel });
+    }),
+
+    vscode.commands.registerCommand('markdownsInGraph.query', async (initialQuery?: unknown) => {
+      await QueryPanel.createOrShow(
+        context,
+        indexer,
+        output,
+        typeof initialQuery === 'string' ? initialQuery : undefined
+      );
     }),
 
     vscode.commands.registerCommand('markdownsInGraph.refresh', async () => {

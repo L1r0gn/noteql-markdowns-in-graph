@@ -43,3 +43,14 @@
 跟随 VS Code 主题自动切换配色。
 
 ![浅色主题](preview-light.png)
+
+## NoteQL 查询面板（v2.1）
+
+左侧是示例查询、内置关系与缓存统计；右侧是查询编辑器与结果表。
+点击结果行会跳到对应文件与行号。
+
+![NoteQL 查询面板](preview-query.png)
+
+> 这张图由 `node scripts/query-preview.js` 生成静态预览，
+> 再用 `node scripts/shot.js` 无头截图；预览页使用 mock `vscode` API，
+> 不需要启动 VS Code 即可检查布局与交互。

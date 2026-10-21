@@ -2,6 +2,7 @@ import {
   "l1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
   "l1r0gn/markdowns-in-graph-core/vault" @vault,
   "l1r0gn/markdowns-in-graph-core/layout" @layout,
+  "l1r0gn/markdowns-in-graph-core/query" @query,
 }
 
 pkgtype(kind: "foreign_library")
@@ -23,6 +24,11 @@ options(
         "vault_build_graph",
         "vault_folders",
         "vault_resolve",
+        "noteql_run",
+        "noteql_relations",
+        "noteql_stats",
+        "noteql_reset_cache",
+        "noteql_selftest",
         "layout_reset",
         "layout_add_node",
         "layout_add_link",
@@ -51,6 +57,11 @@ options(
         "vault_build_graph",
         "vault_folders",
         "vault_resolve",
+        "noteql_run",
+        "noteql_relations",
+        "noteql_stats",
+        "noteql_reset_cache",
+        "noteql_selftest",
         "layout_reset",
         "layout_add_node",
         "layout_add_link",

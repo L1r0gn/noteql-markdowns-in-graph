@@ -1,0 +1,6 @@
+-- 标签使用频率。
+SELECT t.tag, count(*) AS notes
+FROM tag t
+GROUP BY t.tag
+ORDER BY notes DESC, t.tag
+LIMIT 20

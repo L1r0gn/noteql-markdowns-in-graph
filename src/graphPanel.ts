@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { GraphIndexer } from './indexer';
+import { QueryPanel } from './queryPanel';
 
 export interface PanelOptions {
   focus?: string;
@@ -166,6 +167,10 @@ export class GraphPanel {
       }
       case 'refresh': {
         await this.refresh();
+        break;
+      }
+      case 'openQuery': {
+        void QueryPanel.createOrShow(this.context, this.indexer, this.output);
         break;
       }
       case 'copy': {
@@ -392,6 +397,11 @@ export class GraphPanel {
       <button class="icon-btn" id="btn-fit" title="适应视图（0）">
         <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4">
           <path d="M2.5 6V3.5a1 1 0 0 1 1-1H6M10 2.5h2.5a1 1 0 0 1 1 1V6M13.5 10v2.5a1 1 0 0 1-1 1H10M6 13.5H3.5a1 1 0 0 1-1-1V10" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-query" title="NoteQL 查询（Ctrl+Alt+Q）">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4">
+          <circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.3 3.3M5 5.6h4M5 7.6h2.6" stroke-linecap="round"/>
         </svg>
       </button>
       <button class="icon-btn" id="btn-refresh" title="重新扫描工作区（R）">
