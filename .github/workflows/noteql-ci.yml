@@ -1,0 +1,78 @@
+name: noteql-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  consumer:
+    name: NoteQL CLI and SARIF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 直接使用仓库内已提交的 media/core.mjs，不需要 MoonBit 工具链
+      - run: npm ci
+      - name: NoteQL smoke
+        run: node scripts/noteql-test.mjs
+
+      - name: Batch queries to SARIF
+        run: >-
+          node scripts/noteql.mjs
+          --vault example-vault
+          --queries queries
+          --format sarif > noteql.sarif
+
+      - name: Upload SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noteql-sarif
+          path: noteql.sarif
+
+      # 仓库开启 code scanning 后生效；未开启时不让整个 job 变红
+      - name: Upload SARIF to code scanning
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: noteql.sarif
+
+      # 违规类查询：docs 当前没有断链，所以此步应当为绿
+      - name: Gate on docs
+        run: >-
+          node scripts/noteql.mjs
+          --vault docs
+          --file queries/unresolved.nql
+          --fail-on-results
+
+  gate-must-fail:
+    name: Gate must fail on broken vault
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      # 负例：example-vault 故意保留一条断链，闸门必须以退出码 2 失败
+      - name: A broken link must produce exit code 2
+        run: |
+          set +e
+          node scripts/noteql.mjs \
+            --vault example-vault \
+            --file queries/unresolved.nql \
+            --fail-on-results
+          code=$?
+          echo "exit code: $code"
+          test "$code" -eq 2
