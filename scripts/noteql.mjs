@@ -183,44 +183,58 @@ function formatCsv(result) {
   return lines.join('\n');
 }
 
-function buildSarifRun(result, query, name) {
-  const columns = result.columns ?? [];
-  const pathIndex = columns.findIndex((column) => column === 'path' || column === 'from' || column === 'note');
-  const lineIndex = columns.findIndex((column) => column === 'line');
-  const results = (result.rows ?? []).map((row) => {
-    const message = columns.map((column, i) => `${column}=${displayValue(row[i])}`).join(' · ');
-    const entry = {
-      ruleId: 'noteql',
-      level: 'warning',
-      message: { text: message || 'NoteQL result' }
-    };
-    if (pathIndex >= 0) {
-      const uri = displayValue(row[pathIndex]).replace(/\\/g, '/');
-      const region = { startLine: lineIndex >= 0 ? Number(row[lineIndex]) || 1 : 1 };
-      entry.locations = [{ physicalLocation: { artifactLocation: { uri }, region } }];
+function sarifRuleId(name) {
+  const base = String(name || '').replace(/\.nql$/i, '').trim();
+  return base ? `noteql/${base}` : 'noteql';
+}
+
+function buildSarifRun(entries) {
+  const rules = [];
+  const results = [];
+  for (const { result, query, name } of entries) {
+    const columns = result.columns ?? [];
+    const pathIndex = columns.findIndex((column) => column === 'path' || column === 'from' || column === 'note');
+    const lineIndex = columns.findIndex((column) => column === 'line');
+    const ruleId = sarifRuleId(name);
+    const ruleIndex = rules.length;
+    rules.push({
+      id: ruleId,
+      name: name ? `NoteQLQuery:${String(name).replace(/\.nql$/i, '')}` : 'NoteQLQuery',
+      shortDescription: {
+        text: name ? `NoteQL query ${name}` : 'NoteQL query result'
+      },
+      help: { text: query }
+    });
+    for (const row of result.rows ?? []) {
+      const message = columns.map((column, i) => `${column}=${displayValue(row[i])}`).join(' · ');
+      const entry = {
+        ruleId,
+        ruleIndex,
+        level: 'warning',
+        message: { text: message || 'NoteQL result' }
+      };
+      if (pathIndex >= 0) {
+        const uri = displayValue(row[pathIndex]).replace(/\\/g, '/');
+        const region = { startLine: lineIndex >= 0 ? Number(row[lineIndex]) || 1 : 1 };
+        entry.locations = [{ physicalLocation: { artifactLocation: { uri }, region } }];
+      }
+      results.push(entry);
     }
-    return entry;
-  });
+  }
   return {
     tool: {
       driver: {
         name: 'NoteQL',
         informationUri: 'https://github.com/L1r0gn/markdowns-in-graph-moonbit',
         version: '2.1.0',
-        rules: [
-          {
-            id: 'noteql',
-            name: `NoteQLQuery${name ? ':' + name : ''}`,
-            shortDescription: { text: 'NoteQL query result' },
-            help: { text: query }
-          }
-        ]
+        rules
       }
     },
     results
   };
 }
 
+// GitHub code scanning 拒绝同一 category 的多个 run，批量查询必须合并进单个 run。
 function sarifLog(runs) {
   return JSON.stringify(
     {
@@ -234,7 +248,7 @@ function sarifLog(runs) {
 }
 
 function formatSarif(result, query) {
-  return sarifLog([buildSarifRun(result, query, '')]);
+  return sarifLog([buildSarifRun([{ result, query, name: '' }])]);
 }
 
 function printResult(result, query, options) {
@@ -310,7 +324,7 @@ async function main() {
   let totalRows = 0;
   let failed = false;
   const batchJson = [];
-  const batchRuns = [];
+  const batchEntries = [];
   for (const { name, source } of sources) {
     if (sources.length > 1 && (options.format === 'table' || options.format === 'csv')) {
       console.log(`\n# ${name}`);
@@ -330,7 +344,7 @@ async function main() {
       continue;
     }
     if (sources.length > 1 && options.format === 'sarif') {
-      batchRuns.push(buildSarifRun(parsed, source, name));
+      batchEntries.push({ result: parsed, query: source, name });
       continue;
     }
     printResult(parsed, source, options);
@@ -342,8 +356,8 @@ async function main() {
   if (batchJson.length > 0) {
     console.log(JSON.stringify(batchJson, null, 2));
   }
-  if (batchRuns.length > 0) {
-    console.log(sarifLog(batchRuns));
+  if (batchEntries.length > 0) {
+    console.log(sarifLog([buildSarifRun(batchEntries)]));
   }
 
   if (options.stats) {

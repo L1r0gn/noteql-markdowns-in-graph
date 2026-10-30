@@ -15,10 +15,10 @@ jobs:
     name: NoteQL CLI and SARIF
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       # 直接使用仓库内已提交的 media/core.mjs，不需要 MoonBit 工具链
@@ -34,7 +34,7 @@ jobs:
           --format sarif > noteql.sarif
 
       - name: Upload SARIF artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: noteql-sarif
           path: noteql.sarif
@@ -42,9 +42,10 @@ jobs:
       # 仓库开启 code scanning 后生效；未开启时不让整个 job 变红
       - name: Upload SARIF to code scanning
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: noteql.sarif
+          category: noteql
 
       # 违规类查询：docs 当前没有断链，所以此步应当为绿
       - name: Gate on docs
@@ -58,10 +59,10 @@ jobs:
     name: Gate must fail on broken vault
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
       - run: npm ci
 

@@ -90,4 +90,29 @@ assert.equal(sarif.version, '2.1.0');
 assert.ok(sarif.runs[0].results.length >= 1);
 assert.ok(sarif.runs[0].results[0].locations[0].physicalLocation.region.startLine >= 1);
 
+// 批量查询必须合并为单个 run，否则 GitHub code scanning 拒绝同一 category 的多个 run
+const batchOut = execFileSync(
+  process.execPath,
+  [cli, '--vault', path.join(root, 'example-vault'),
+    '--queries', path.join(root, 'queries'), '--format', 'sarif'],
+  { encoding: 'utf8' }
+);
+const batchSarif = JSON.parse(batchOut);
+assert.equal(batchSarif.runs.length, 1, '批量 SARIF 只能有一个 run');
+const batchRun = batchSarif.runs[0];
+const queryCount = fs
+  .readdirSync(path.join(root, 'queries'))
+  .filter((name) => name.endsWith('.nql')).length;
+assert.equal(batchRun.tool.driver.rules.length, queryCount, '每条查询应生成一条 rule');
+assert.equal(
+  new Set(batchRun.tool.driver.rules.map((rule) => rule.id)).size,
+  queryCount,
+  'rule id 必须唯一'
+);
+assert.ok(batchRun.results.length >= 1);
+for (const entry of batchRun.results) {
+  assert.equal(batchRun.tool.driver.rules[entry.ruleIndex].id, entry.ruleId);
+}
+assert.ok(batchRun.results.some((entry) => entry.ruleId === 'noteql/unresolved'));
+
 console.log('NoteQL JS/CLI 冒烟测试通过');
