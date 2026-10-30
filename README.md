@@ -66,7 +66,7 @@
 | NoteQL 查询 | SQL 风格查询笔记、链接、标签、断链、孤立节点与环；结果可跳转到文件行号 |
 | 图函数     | `distance` / `reachable` / `in_cycle` / `indegree` / `outdegree` / `degree` |
 | 增量复用   | 按关系依赖缓存查询结果：只改链接时 `tag` 查询命中，只改标签时 `link` 查询命中 |
-| CLI / CI   | `scripts/noteql.mjs` 输出 table / JSON / CSV / SARIF；`--fail-on-results` 可做体检闸门 |
+| CLI / CI   | `scripts/noteql.mjs` 输出 table / JSON / CSV / SARIF；`--fail-on-results` 可做体检闸门；GitHub Actions 验证 CLI 与 SARIF 上传 |
 
 ## 界面预览
 
@@ -96,6 +96,7 @@
 - VS Code **1.75.0** 及以上
 - Node.js **18+**（仅编译 / 打包时需要）
 - 一个包含 Markdown 文件的文件夹（作为工作区打开）
+- MoonBit 工具链（仅从源码编译内核时需要）：`moon` **0.1.20261016** / `moonc` **0.10.16+b1a0e846e**（2026-10-16）
 
 ### 方式一：从源码编译并在开发宿主中运行（最快试玩）
 
@@ -405,6 +406,14 @@ node scripts/noteql.mjs --vault example-vault \
 
 `--format` 支持 `table` / `json` / `csv` / `sarif`；`--fail-on-results` 在有结果行时返回退出码 2。
 
+仓库自带 [`.github/workflows/noteql-ci.yml`](.github/workflows/noteql-ci.yml)，在 push 到 `main`、
+pull request 或手动触发时运行，直接使用已提交的 `media/core.mjs`，不需要安装 MoonBit 工具链：
+
+- 运行 `node scripts/noteql-test.mjs` 做 CLI 冒烟；
+- 把 `queries/` 的批量查询结果导出为 `noteql.sarif`，作为 artifact 上传，并在仓库开启 code scanning 后上传；
+- 对 `docs/` 执行 `queries/unresolved.nql` 闸门（当前应无断链，退出码 0）；
+- 负例 job 验证 `example-vault` 中故意保留的断链会让闸门以退出码 2 失败。
+
 ## MoonBit 内核
 
 内核位于 `core/`，是一个独立的 MoonBit 模块（`l1r0gn/markdowns-in-graph-core`），
@@ -416,6 +425,9 @@ npm run core:test       # 41 个单元测试（moon test，含 NoteQL）
 npm run parity          # 逐文件比对 TypeScript 旧实现与 MoonBit 内核的解析结果
 npm run bench           # 解析 / 建索引 / 布局三组基准
 ```
+
+当前内核使用 MoonBit **0.1.20261016**（`moonc` **0.10.16+b1a0e846e**，2026-10-16）构建，
+测试与检查均以 `wasm-gc` 为目标。
 
 | 包 | 职责 | 关键实现 |
 | --- | --- | --- |
@@ -626,11 +638,9 @@ markdowns-in-graph/
 │   ├── query.js           # 查询面板：编辑器、结果表、行跳转
 │   └── query.css          # 查询面板样式
 ├── docs/                  # 文档、截图与 NoteQL 语言参考
+├── .github/               # GitHub Actions：NoteQL CLI 冒烟与 SARIF 体检闸门
 ├── example-vault/         # 示例笔记库（用于试玩）
 └── scripts/               # 开发辅助脚本（预览/截图/测试/NoteQL CLI）
-```
-
-
 ```
 
 ### 消息协议（扩展 ⇄ Webview）
