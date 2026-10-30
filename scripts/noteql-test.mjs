@@ -5,7 +5,7 @@
  *   node scripts/noteql-test.mjs
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -87,17 +87,32 @@ const sarifOut = execFileSync(
 );
 const sarif = JSON.parse(sarifOut);
 assert.equal(sarif.version, '2.1.0');
+assert.equal(sarif.$schema, 'https://json.schemastore.org/sarif-2.1.0.json');
+assert.equal(sarif.runs.length, 1);
 assert.ok(sarif.runs[0].results.length >= 1);
-assert.ok(sarif.runs[0].results[0].locations[0].physicalLocation.region.startLine >= 1);
+for (const entry of sarif.runs[0].results) {
+  const physical = entry.locations?.[0]?.physicalLocation;
+  assert.ok(physical, '每条 SARIF result 都必须有物理位置');
+  assert.ok(physical.artifactLocation.uri.startsWith('example-vault/'));
+  assert.ok(!physical.artifactLocation.uri.includes('\\'));
+  assert.ok(!physical.artifactLocation.uri.startsWith('/'));
+  assert.ok(physical.region.startLine >= 1);
+  assert.ok(
+    fs.existsSync(path.join(root, decodeURIComponent(physical.artifactLocation.uri))),
+    'SARIF URI 必须指向仓库内真实文件'
+  );
+}
+
+const exampleVault = path.join(root, 'example-vault');
 
 // 批量查询必须合并为单个 run，否则 GitHub code scanning 拒绝同一 category 的多个 run
-const batchOut = execFileSync(
+const batch = spawnSync(
   process.execPath,
-  [cli, '--vault', path.join(root, 'example-vault'),
-    '--queries', path.join(root, 'queries'), '--format', 'sarif'],
+  [cli, '--vault', exampleVault, '--queries', path.join(root, 'queries'), '--format', 'sarif'],
   { encoding: 'utf8' }
 );
-const batchSarif = JSON.parse(batchOut);
+assert.equal(batch.status, 0);
+const batchSarif = JSON.parse(batch.stdout);
 assert.equal(batchSarif.runs.length, 1, '批量 SARIF 只能有一个 run');
 const batchRun = batchSarif.runs[0];
 const queryCount = fs
@@ -112,7 +127,47 @@ assert.equal(
 assert.ok(batchRun.results.length >= 1);
 for (const entry of batchRun.results) {
   assert.equal(batchRun.tool.driver.rules[entry.ruleIndex].id, entry.ruleId);
+  const physical = entry.locations?.[0]?.physicalLocation;
+  assert.ok(physical, '批量 SARIF 的每条 result 都必须有物理位置');
+  assert.ok(physical.artifactLocation.uri.startsWith('example-vault/'));
+  assert.ok(!physical.artifactLocation.uri.includes('\\'));
+  assert.ok(!physical.artifactLocation.uri.startsWith('/'));
+  assert.ok(physical.region.startLine >= 1);
+  assert.ok(
+    fs.existsSync(path.join(root, decodeURIComponent(physical.artifactLocation.uri))),
+    '批量 SARIF 的 URI 必须指向仓库内真实文件'
+  );
 }
 assert.ok(batchRun.results.some((entry) => entry.ruleId === 'noteql/unresolved'));
+const resultsByRule = new Map();
+for (const entry of batchRun.results) {
+  resultsByRule.set(entry.ruleId, (resultsByRule.get(entry.ruleId) ?? 0) + 1);
+}
+for (const aggregate of ['noteql/folder_summary', 'noteql/tag_usage']) {
+  assert.equal(resultsByRule.get(aggregate) ?? 0, 0, `${aggregate} 没有文件位置，不应写入 SARIF`);
+}
+assert.match(batch.stderr, /folder_summary.*未写入 SARIF/);
+assert.match(batch.stderr, /tag_usage.*未写入 SARIF/);
+
+// 完全无法定位的聚合查询：不生成非法 SARIF result，但必须显式提示
+const aggregate = spawnSync(
+  process.execPath,
+  [cli, '--vault', exampleVault, '--format', 'sarif', 'SELECT count(*) AS n FROM note n'],
+  { encoding: 'utf8' }
+);
+assert.equal(aggregate.status, 0);
+const aggregateSarif = JSON.parse(aggregate.stdout);
+assert.equal(aggregateSarif.runs.length, 1);
+assert.equal(aggregateSarif.runs[0].results.length, 0);
+assert.match(aggregate.stderr, /1 条结果没有可定位的仓库内文件，未写入 SARIF/);
+
+// --fail-on-results 仍以退出码 2 表示“有结果行”
+const gate = spawnSync(
+  process.execPath,
+  [cli, '--vault', exampleVault, '--file', path.join(root, 'queries', 'unresolved.nql'),
+    '--fail-on-results'],
+  { encoding: 'utf8' }
+);
+assert.equal(gate.status, 2);
 
 console.log('NoteQL JS/CLI 冒烟测试通过');

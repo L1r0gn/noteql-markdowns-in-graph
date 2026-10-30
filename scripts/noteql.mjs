@@ -188,13 +188,63 @@ function sarifRuleId(name) {
   return base ? `noteql/${base}` : 'noteql';
 }
 
-function buildSarifRun(entries) {
+const LOCATION_COLUMNS = ['path', 'from', 'note', 'file'];
+
+function findRepoRoot(startDir) {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+// GitHub code scanning 要求仓库根相对、URI 编码的路径；定位不到真实文件时返回 null。
+function resolveSarifUri(row, columns, { vaultDir, repoRoot }) {
+  const locatorIndex = LOCATION_COLUMNS
+    .map((column) => columns.indexOf(column))
+    .find((index) => index >= 0 && row[index] != null && String(row[index]).trim() !== '');
+  if (locatorIndex === undefined) return null;
+  const absPath = path.resolve(vaultDir, String(row[locatorIndex]));
+  let stat;
+  try {
+    stat = fs.statSync(absPath);
+  } catch {
+    return null;
+  }
+  if (!stat.isFile()) return null;
+  let relative = null;
+  if (repoRoot) {
+    const candidate = path.relative(repoRoot, absPath);
+    if (candidate && !candidate.startsWith('..') && !path.isAbsolute(candidate)) {
+      relative = candidate;
+    }
+  }
+  if (!relative) {
+    const candidate = path.relative(vaultDir, absPath);
+    if (!candidate || candidate.startsWith('..') || path.isAbsolute(candidate)) return null;
+    relative = candidate;
+  }
+  return relative.split(path.sep).map(encodeURIComponent).join('/');
+}
+
+function sarifRegion(row, columns) {
+  const lineIndex = columns.findIndex((column) => column === 'line');
+  let startLine = 1;
+  if (lineIndex >= 0) {
+    const value = Number(row[lineIndex]);
+    if (Number.isInteger(value) && value > 0) startLine = value;
+  }
+  return { startLine, startColumn: 1, endLine: startLine, endColumn: 2 };
+}
+
+function buildSarifRun(entries, context) {
   const rules = [];
   const results = [];
+  const omitted = [];
   for (const { result, query, name } of entries) {
     const columns = result.columns ?? [];
-    const pathIndex = columns.findIndex((column) => column === 'path' || column === 'from' || column === 'note');
-    const lineIndex = columns.findIndex((column) => column === 'line');
     const ruleId = sarifRuleId(name);
     const ruleIndex = rules.length;
     rules.push({
@@ -205,32 +255,44 @@ function buildSarifRun(entries) {
       },
       help: { text: query }
     });
+    let skipped = 0;
     for (const row of result.rows ?? []) {
+      const uri = resolveSarifUri(row, columns, context);
+      if (!uri) {
+        skipped += 1;
+        continue;
+      }
       const message = columns.map((column, i) => `${column}=${displayValue(row[i])}`).join(' · ');
-      const entry = {
+      results.push({
         ruleId,
         ruleIndex,
         level: 'warning',
-        message: { text: message || 'NoteQL result' }
-      };
-      if (pathIndex >= 0) {
-        const uri = displayValue(row[pathIndex]).replace(/\\/g, '/');
-        const region = { startLine: lineIndex >= 0 ? Number(row[lineIndex]) || 1 : 1 };
-        entry.locations = [{ physicalLocation: { artifactLocation: { uri }, region } }];
-      }
-      results.push(entry);
+        message: { text: message || 'NoteQL result' },
+        locations: [
+          {
+            physicalLocation: {
+              artifactLocation: { uri },
+              region: sarifRegion(row, columns)
+            }
+          }
+        ]
+      });
     }
+    if (skipped > 0) omitted.push({ name: name || 'query', count: skipped });
   }
   return {
-    tool: {
-      driver: {
-        name: 'NoteQL',
-        informationUri: 'https://github.com/L1r0gn/markdowns-in-graph-moonbit',
-        version: '2.1.0',
-        rules
-      }
+    run: {
+      tool: {
+        driver: {
+          name: 'NoteQL',
+          informationUri: 'https://github.com/L1r0gn/markdowns-in-graph-moonbit',
+          version: '2.1.0',
+          rules
+        }
+      },
+      results
     },
-    results
+    omitted
   };
 }
 
@@ -247,17 +309,27 @@ function sarifLog(runs) {
   );
 }
 
-function formatSarif(result, query) {
-  return sarifLog([buildSarifRun([{ result, query, name: '' }])]);
+function reportOmitted(omitted) {
+  for (const { name, count } of omitted) {
+    console.error(
+      `[${name}] ${count} 条结果没有可定位的仓库内文件，未写入 SARIF（table / json / csv 输出不受影响）`
+    );
+  }
 }
 
-function printResult(result, query, options) {
+function formatSarif(result, query, context, name) {
+  return buildSarifRun([{ result, query, name }], context);
+}
+
+function printResult(result, query, options, context, name) {
   if (options.format === 'json') {
     console.log(JSON.stringify(result, null, 2));
   } else if (options.format === 'csv') {
     console.log(formatCsv(result));
   } else if (options.format === 'sarif') {
-    console.log(formatSarif(result, query));
+    const { run, omitted } = formatSarif(result, query, context, name);
+    console.log(sarifLog([run]));
+    reportOmitted(omitted);
   } else {
     console.log(formatTable(result));
     const cacheState = result.cached ? 'warm' : 'cold';
@@ -290,6 +362,7 @@ async function main() {
   if (!fs.existsSync(vaultDir) || !fs.statSync(vaultDir).isDirectory()) {
     throw new Error(`笔记目录不存在：${vaultDir}`);
   }
+  const locationContext = { vaultDir, repoRoot: findRepoRoot(vaultDir) };
   const started = process.hrtime.bigint();
   const loaded = loadVault(core, vaultDir);
   const indexMs = Number(process.hrtime.bigint() - started) / 1e6;
@@ -347,7 +420,7 @@ async function main() {
       batchEntries.push({ result: parsed, query: source, name });
       continue;
     }
-    printResult(parsed, source, options);
+    printResult(parsed, source, options, locationContext, sources.length > 1 ? name : '');
     if (options.format === 'table') {
       console.log(`耗时 ${elapsed.toFixed(2)} ms`);
     }
@@ -357,7 +430,9 @@ async function main() {
     console.log(JSON.stringify(batchJson, null, 2));
   }
   if (batchEntries.length > 0) {
-    console.log(sarifLog([buildSarifRun(batchEntries)]));
+    const { run, omitted } = buildSarifRun(batchEntries, locationContext);
+    console.log(sarifLog([run]));
+    reportOmitted(omitted);
   }
 
   if (options.stats) {
