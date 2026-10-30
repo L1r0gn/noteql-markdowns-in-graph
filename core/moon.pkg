@@ -1,8 +1,8 @@
 import {
-  "l1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
-  "l1r0gn/markdowns-in-graph-core/vault" @vault,
-  "l1r0gn/markdowns-in-graph-core/layout" @layout,
-  "l1r0gn/markdowns-in-graph-core/query" @query,
+  "L1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
+  "L1r0gn/markdowns-in-graph-core/vault" @vault,
+  "L1r0gn/markdowns-in-graph-core/layout" @layout,
+  "L1r0gn/markdowns-in-graph-core/query" @query,
 }
 
 pkgtype(kind: "foreign_library")

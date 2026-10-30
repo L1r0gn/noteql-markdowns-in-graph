@@ -11,9 +11,9 @@
 // 参考资料：
 //   https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html
 
-name = "l1r0gn/markdowns-in-graph-core"
+name = "L1r0gn/markdowns-in-graph-core"
 
-version = "2.1.0"
+version = "0.1.0"
 
 readme = "README.mbt.md"
 
@@ -33,3 +33,5 @@ keywords = [
 description = "MoonBit core engine for Markdowns In Graph: wikilink parsing, vault indexing, graph building, Barnes-Hut layout, and NoteQL — an incremental graph query engine with dependency-aware caching."
 
 preferred_target = "wasm-gc"
+
+repository = "https://github.com/L1r0gn/markdowns-in-graph-moonbit"

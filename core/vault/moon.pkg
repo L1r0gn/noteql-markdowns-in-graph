@@ -1,6 +1,6 @@
 import {
-  "l1r0gn/markdowns-in-graph-core/path" @path,
-  "l1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
+  "L1r0gn/markdowns-in-graph-core/path" @path,
+  "L1r0gn/markdowns-in-graph-core/mdparse" @mdparse,
 }
 
 warnings = "-implicit_impl_as_method"
