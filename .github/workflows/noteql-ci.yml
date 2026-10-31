@@ -11,6 +11,59 @@ permissions:
   security-events: write
 
 jobs:
+  # 内核质量闸门：检查 → 构建 → 测试，全部在真实 MoonBit 工具链上跑。
+  # 其余 job 直接消费仓库内已提交的 media/core.mjs，因此不需要工具链；
+  # 只有这里保证源码本身能通过 moon 的三道关。
+  moonbit-core:
+    name: MoonBit check / build / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      # 验收要求 moonc >= 0.10.16，版本不够就让 job 直接红
+      - name: Require moonc >= 0.10.16
+        run: |
+          moon version --all
+          v=$(moonc -v | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "moonc = $v"
+          lowest=$(printf '%s\n%s\n' "0.10.16" "$v" | sort -V | head -1)
+          if [ "$lowest" != "0.10.16" ]; then
+            echo "::error::moonc $v is older than the required 0.10.16"
+            exit 1
+          fi
+
+      - name: moon check
+        run: moon -C core check --target wasm-gc
+
+      - name: moon build
+        run: |
+          moon -C core build --target wasm-gc --release
+          moon -C core build --target js --release
+
+      - name: moon test
+        run: moon -C core test --target wasm-gc
+
+      - run: npm ci
+
+      - name: TypeScript typecheck and compile
+        run: |
+          npm run typecheck
+          npm run compile
+
+      # 重构前后语义一致性：TypeScript 旧解析器 vs MoonBit 内核
+      - name: Parse parity
+        run: npm run parity
+
   consumer:
     name: NoteQL CLI and SARIF
     runs-on: ubuntu-latest
