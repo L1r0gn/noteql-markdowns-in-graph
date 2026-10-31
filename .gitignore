@@ -20,3 +20,10 @@ core/**/pkg.generated.mbti
 申报书-提交版.md
 申报书1.md
 docs/项目作用说明.md
+docs/PROJECT_MEMORY.md
+
+# 本地设计笔记（本地保留，不入库）
+/docs/HACKATHON.md
+/docs/MOONBIT.md
+/docs/ICON.md
+/docs/NOTEQL.md

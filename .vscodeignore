@@ -11,6 +11,8 @@ core/**
 **/moon.mod
 docs/MOONBIT.md
 docs/HACKATHON.md
+docs/ICON.md
+docs/NOTEQL.md
 scripts/**
 **/.DS_Store
 *.vsix
