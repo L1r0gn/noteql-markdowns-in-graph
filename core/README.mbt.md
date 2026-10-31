@@ -1,6 +1,6 @@
-# Markdowns In Graph · Core Engine (MoonBit)
+# NoteQL - Markdowns In Graph · Core Engine (MoonBit)
 
-`markdowns-in-graph-core` 是 VS Code 扩展 **Markdowns In Graph** 的计算内核，
+`noteql-markdowns-in-graph` 是 VS Code 扩展 **NoteQL - Markdowns In Graph** 的计算内核，
 用 MoonBit 编写并编译为 WebAssembly（`wasm-gc`）与 JavaScript（`js`）两种产物。
 
 它负责扩展里全部「脏活」：
@@ -19,8 +19,8 @@
 ```bash
 moon check --target wasm-gc
 moon test  --target wasm-gc              # 41 个测试
-moon build --target wasm-gc --release    # _build/wasm-gc/release/build/markdowns-in-graph-core.wasm
-moon build --target js --release         # _build/js/release/build/markdowns-in-graph-core.js
+moon build --target wasm-gc --release    # _build/wasm-gc/release/build/noteql-markdowns-in-graph.wasm
+moon build --target js --release         # _build/js/release/build/noteql-markdowns-in-graph.js
 ```
 
 在仓库根目录也可以：
@@ -54,5 +54,4 @@ note  file  link  tag  unresolved  ambiguous  orphan  cycle
 distance  reachable  in_cycle  indegree  outdegree  degree
 ```
 
-查询语言与语义见仓库的 `docs/NOTEQL.md`：
-<https://github.com/L1r0gn/markdowns-in-graph-moonbit/blob/main/docs/NOTEQL.md>
+查询语法示例见仓库根目录的 `queries/` 目录，内核实现在 `core/query` 包。

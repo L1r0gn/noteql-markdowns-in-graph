@@ -1,4 +1,4 @@
-// Markdowns In Graph 核心引擎
+// NoteQL - Markdowns In Graph 核心引擎
 //
 // 这个模块是整个 VS Code 扩展的「计算内核」：解析 Markdown 双链与标签、
 // 维护工作区文件索引、按 Obsidian 的规则解析链接、构建图谱数据结构，
@@ -11,7 +11,7 @@
 // 参考资料：
 //   https://docs.moonbitlang.com/en/latest/toolchain/moon/package.html
 
-name = "L1r0gn/markdowns-in-graph-core"
+name = "L1r0gn/noteql-markdowns-in-graph"
 
 version = "0.1.0"
 
@@ -30,7 +30,7 @@ keywords = [
   "wasm",
 ]
 
-description = "MoonBit core engine for Markdowns In Graph: wikilink parsing, vault indexing, graph building, Barnes-Hut layout, and NoteQL — an incremental graph query engine with dependency-aware caching."
+description = "MoonBit core engine for NoteQL - Markdowns In Graph: wikilink parsing, vault indexing, graph building, Barnes-Hut layout, and NoteQL — an incremental graph query engine with dependency-aware caching."
 
 preferred_target = "wasm-gc"
 

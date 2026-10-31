@@ -1,4 +1,4 @@
-# Markdowns In Graph — VS Code 的 Markdown 关系图谱
+# NoteQL - Markdowns In Graph
 
 把整个工作区的 Markdown 笔记变成一张可交互的知识网络：**解析 `[[双链]]` 与标准链接 → 力导向布局 → 缩放/平移/拖拽 → 点击跳转 → 实时更新 → 筛选、搜索、局部聚焦**。
 
@@ -12,7 +12,7 @@
 `SELECT ... FROM ... WHERE ... GROUP BY ... ORDER BY ... LIMIT`，
 以及 `distance` / `reachable` / `in_cycle` 等图函数。查询可以跑在 VS Code 面板里，
 也可以作为 CLI 接入 CI（支持 JSON / CSV / SARIF 输出）。
-详见 [NoteQL](#noteql-查询) 与 [`docs/NOTEQL.md`](docs/NOTEQL.md)。
+详见 [NoteQL](#noteql-查询)。
 
 > 界面截图位于仓库 `docs/` 目录，见 `docs/SCREENSHOTS.md`。
 
@@ -81,7 +81,7 @@
 | `docs/preview-v2-core.png` | v2.0 · 布局由 MoonBit/Wasm 内核计算 |
 | `docs/preview-query.png` | v2.1 · NoteQL 查询面板（查询在扩展宿主内执行） |
 
-更多说明见 `docs/SCREENSHOTS.md`；图标设计与可复用提示词见 `docs/ICON.md`。
+更多说明见 `docs/SCREENSHOTS.md`。
 
 > 这张 v2.0 截图由 `npm run smoke` 同款流程生成：无头浏览器加载预览页，
 > 内核自检通过（`window.__graphCore === 'wasm'`）后连续跑 6 秒布局再截图。
@@ -381,7 +381,7 @@ ORDER BY notes DESC;
 
 支持 `WHERE`、`GROUP BY`、`HAVING`、`ORDER BY`、`LIMIT`、`DISTINCT`、聚合函数，
 以及 `distance` / `reachable` / `in_cycle` / `indegree` / `outdegree` / `degree`。
-完整语法、语义与限制见 [`docs/NOTEQL.md`](docs/NOTEQL.md)。
+完整语法与语义见本节；可直接运行的示例在 `queries/` 目录。
 
 ### 增量复用
 
@@ -416,7 +416,8 @@ pull request 或手动触发时运行，直接使用已提交的 `media/core.mjs
 
 ## MoonBit 内核
 
-内核位于 `core/`，是一个独立的 MoonBit 模块（`l1r0gn/markdowns-in-graph-core`），
+内核位于 `core/`，是一个独立的 MoonBit 模块（`l1r0gn/noteql-markdowns-in-graph`，
+已发布到 [mooncakes.io](https://mooncakes.io/docs/L1r0gn/noteql-markdowns-in-graph)），
 用同一条命令即可产出两份产物：
 
 ```bash
@@ -534,7 +535,7 @@ NoteQL 基准（Node 24 / Windows，JS 后端，1200 篇合成笔记 / 约 48,00
 ## 常见问题
 
 **图谱是空的？**
-确认工作区里有 `.md` 文件，且没有被 `markdownsInGraph.exclude` 排除；查看输出面板 `Markdown Graph` 的扫描日志。
+确认工作区里有 `.md` 文件，且没有被 `markdownsInGraph.exclude` 排除；查看输出面板 `NoteQL - Markdowns In Graph` 的扫描日志。
 
 **某个双链没有连线？**
 
@@ -561,7 +562,7 @@ NoteQL 基准（Node 24 / Windows，JS 后端，1200 篇合成笔记 / 约 48,00
 ```bash
 npm install        # 安装依赖（typescript / @types/vscode / vsce）
 
-# MoonBit 内核（需要先安装 moon 工具链，见 docs/MOONBIT.md）
+# MoonBit 内核（需要先安装 moon 工具链，见 core/README.mbt.md）
 npm run core:check # 内核类型检查
 npm run core:test  # 内核单元测试（41 个，含 NoteQL）
 npm run core:build # 编译 wasm-gc + js，产物写入 media/
@@ -577,7 +578,7 @@ npm run bench      # 解析 / 建索引 / 布局基准
 npm run smoke      # 无头浏览器验证 Webview 真的用上了 wasm 内核
 
 # NoteQL
-npm run noteql         # 查询 CLI（参数见 docs/NOTEQL.md）
+npm run noteql         # 查询 CLI（用法见 queries/README.md）
 npm run noteql:test    # JS/CLI 冒烟测试
 npm run noteql:bench   # 查询冷/热/增量基准
 npm run preview:query  # 生成查询面板静态预览

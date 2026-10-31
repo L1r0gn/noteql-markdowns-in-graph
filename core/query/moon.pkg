@@ -1,5 +1,5 @@
 import {
-  "L1r0gn/markdowns-in-graph-core/vault" @vault,
+  "L1r0gn/noteql-markdowns-in-graph/vault" @vault,
 }
 
 warnings = "-implicit_impl_as_method"

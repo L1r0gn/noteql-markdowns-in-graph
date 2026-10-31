@@ -150,7 +150,7 @@ export class MoonCore {
 
     if (!fs.existsSync(jsPath)) {
       throw new Error(
-        `Markdowns In Graph 内核缺失：${wasmPath} 与 ${jsPath} 都不存在。请先运行 npm run core:build。`
+        `NoteQL - Markdowns In Graph 内核缺失：${wasmPath} 与 ${jsPath} 都不存在。请先运行 npm run core:build。`
       );
     }
     const mod = (await dynamicImport(pathToFileURL(jsPath).href)) as unknown as CoreExports;

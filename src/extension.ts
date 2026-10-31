@@ -4,7 +4,7 @@ import { GraphPanel } from './graphPanel';
 import { QueryPanel } from './queryPanel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const output = vscode.window.createOutputChannel('Markdown Graph');
+  const output = vscode.window.createOutputChannel('NoteQL - Markdowns In Graph');
   context.subscriptions.push(output);
   output.appendLine('[graph] 扩展已激活');
 
@@ -12,10 +12,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(indexer);
 
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 90);
-  status.name = 'Markdown 关系图谱';
+  status.name = 'NoteQL - Markdowns In Graph';
   status.command = 'markdownsInGraph.show';
   status.text = '$(type-hierarchy) 图谱';
-  status.tooltip = '打开 Markdown 关系图谱（Ctrl+Alt+G）';
+  status.tooltip = '打开 NoteQL - Markdowns In Graph 关系图谱（Ctrl+Alt+G）';
   status.show();
   context.subscriptions.push(status);
 

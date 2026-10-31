@@ -1,5 +1,28 @@
 # Changelog
 
+## 未发布
+
+### 变更：项目名称统一
+
+展示名称统一为 **NoteQL - Markdowns In Graph**，覆盖扩展 `displayName`、设置页标题、
+README / 内核 README / 截图文档标题、图标无障碍标签、内核模块注释与描述、
+运行时提示文案、输出面板与状态栏名称。
+
+扩展标识 `L1r0gn.markdowns-in-graph`、npm 包名 `markdowns-in-graph`、
+命令前缀 `markdownsInGraph.*`、配置项键名保持不变，已有用户设置、快捷键绑定与已安装版本不受影响。
+
+### 变更：MoonBit 模块改名并重新发布
+
+模块名由 `L1r0gn/markdowns-in-graph-core` 改为 `L1r0gn/noteql-markdowns-in-graph`
+（mooncakes.io 的模块名不允许空格，故用 slug 形式；展示名仍是 NoteQL - Markdowns In Graph），
+以 0.1.0 作为新包首发。旧包 `markdowns-in-graph-core` 已 `moon deprecate`，指向新名。
+
+同步改动：`core/moon.pkg`、`core/vault/moon.pkg`、`core/query/moon.pkg` 共 7 处内部 import 前缀；
+`scripts/build-core.js` 从 `_build` 拷贝产物时使用的文件名；
+`core/README.mbt.md` 与根 `README.md` 中的模块名引用。
+
+运行时无变化：扩展加载的仍是 `media/core.wasm` / `media/core.mjs`，文件名与路径均未改。
+
 ## 2.1.0 — 2026-10-21
 
 ### 新增：NoteQL 查询与增量复用引擎
@@ -128,7 +151,7 @@ TypeScript 只保留 VS Code 适配层（枚举文件、读取内容、转发消
 
 - 扩展图标：深色圆角底板 + 中心「笔记」节点 + 五个卫星节点与八条连线，与图谱配色一致；
   提供 SVG 源文件与 128 / 256 / 1024 三种 PNG，128 尺寸接入 `package.json` 的 `icon` 字段
-- `docs/ICON.md`：图标定位、设计决策、配色表与可复用的英文生成提示词
+- 图标定位、设计决策、配色表与可复用的英文生成提示词（记录于本地设计笔记，不入库）
 - `scripts/export-icon.js`：修改 SVG 后一键重新导出各尺寸，保留透明通道
 
 ### 变更

@@ -12,7 +12,7 @@
  *
  * Windows 提示：如果 `moonc` 因为 `\\?\` 前缀报 `Sys_error("\\\\?")`，
  * 先设置环境变量 MOONC_OVERRIDE 指向一个去掉该前缀的包装器
- * （见 docs/MOONBIT.md）。
+ * （构建说明见 core/README.mbt.md）。
  */
 'use strict';
 
@@ -70,7 +70,7 @@ for (const item of targets) {
     continue;
   }
   const buildDir = path.join(coreDir, '_build', item.target, 'release', 'build');
-  const artifact = path.join(buildDir, `markdowns-in-graph-core${item.ext}`);
+  const artifact = path.join(buildDir, `noteql-markdowns-in-graph${item.ext}`);
   ok = copy(artifact, path.join(mediaDir, item.out)) && ok;
 }
 

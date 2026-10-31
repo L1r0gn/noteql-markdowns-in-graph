@@ -1,6 +1,6 @@
 # 界面截图
 
-![Markdowns In Graph 图标](icon.png)
+![NoteQL - Markdowns In Graph 图标](icon.png)
 
 ## 深色主题 · 全局图谱
 
